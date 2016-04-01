@@ -84,7 +84,7 @@ def parse_ply2(filename):
         raise RuntimeError('File not in ascii format')
     l = f.readline()
     while l.split()[0]=='comment':
-        print l[l.index(' ')+1:]
+        print(l[l.index(' ')+1:])
         l = f.readline()
     element_list = []
     while l.strip()!='end_header':
@@ -129,9 +129,9 @@ def parse_ply2(filename):
                 el_data.append(prop_data)
             eltype_data.append(tuple(el_data))
         data[eltype_name] = (eltype_data, [x[0] for x in el[2]])
-    print data['face'][-1]
+    print(data['face'][-1])
 
-    print 'done_parse'
+    print('done_parse')
     return element_list, data
 
 class ProjectionMesh(object):
@@ -144,10 +144,10 @@ class ProjectionMesh(object):
         self.data = data
         NV = len(data['vertex'][0])
         NF = len(data['face'][0])
-        print 'NF', NF
+        print('NF', NF)
         verts = []
         vert_norms = []
-        print data['vertex'][1]
+        print(data['vertex'][1])
         x_idx = data['vertex'][1].index('x')
         y_idx = data['vertex'][1].index('y')
         z_idx = data['vertex'][1].index('z')
@@ -157,7 +157,7 @@ class ProjectionMesh(object):
         for v in data['vertex'][0]:
             verts.append((v[x_idx], v[y_idx], v[z_idx]))
             vert_norms.append(np.array((v[nx_idx], v[ny_idx], v[nz_idx])))
-        print 'done_vertex'
+        prin(('done_vertex'))
         v_array=np.array(verts,dtype='float32')
 
         self.bbox=(np.min(v_array,0),  np.max(v_array,0) )
@@ -171,14 +171,14 @@ class ProjectionMesh(object):
             for i in range(len(vv)-2):
                 tris.append((vv[0], vv[i+1], vv[i+2]))
             self.tris.extend(tris)
-        print 'done_face'
+        print('done_face')
 
     def get_zoom(self):
         zoom=1.0/la.norm(self.bbox[1]-self.bbox[0])
         return zoom
 
     def generate_arrays_projection(self):
-        print 'start_arrays'
+        prin(('start_arrays'))
         npr.seed(1)
         tris = []
         v_out=np.array(self.verts,dtype=np.float32) 
@@ -191,6 +191,7 @@ class ProjectionMesh(object):
 class RenderWindow(object):
     def __init__(self):
         glutInit([])
+        glutInitContextVersion(3, 2)
         glutInitWindowSize(800, 600)
         glutInitDisplayMode(GLUT_RGBA | GLUT_DEPTH)
         self.window = glutCreateWindow("Cell surface")
@@ -358,7 +359,7 @@ class RenderWindow(object):
                             , dtype=np.uint32)        
         o.vtVBO=VBO(vb)
 
-        print 'made VBO'
+        print('made VBO')
         o.vtVBO.bind()
 
         glEnableVertexAttribArray( vs.b_position_location )
@@ -442,7 +443,7 @@ class RenderWindow(object):
 
         if self.fbo == None:
             self.fbo = glGenFramebuffers(1)
-        print "fbo", self.fbo
+        print("fbo", self.fbo)
 
         glActiveTexture(GL_TEXTURE0 + 1)
 
@@ -451,20 +452,20 @@ class RenderWindow(object):
 
         self.bfTex = glGenTextures(1)
 
-        print "gen Tex 1"
+        print("gen Tex 1")
         glBindTexture(GL_TEXTURE_2D, self.bfTex)
 
         glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
         glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
 
-        print "bound", self.bfTex
+        print("bound", self.bfTex)
 
-        print self.width, self.height
+        print(self.width, self.height)
         w = int(self.width)
         h = int(self.height)
 
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0, GL_RGBA, GL_FLOAT, None)
-        print "made texture img"
+        print("made texture img")
 
 
         glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
@@ -478,17 +479,17 @@ class RenderWindow(object):
     def load_stack(self, stack_fn):
         data = open_tiff(stack_fn)
 
-        print 'data shape', data.shape
+        print('data shape', data.shape)
 
         s = np.array(data, dtype=np.uint8, order='F')
 
-        print s.shape
+        print(s.shape)
 
         w, h, d = s.shape
-        print 'shape', s.shape
+        print('shape', s.shape)
 
         stack_texture = glGenTextures(1)
-        print stack_texture
+        print(stack_texture)
 
         glActiveTexture(GL_TEXTURE0)
         glBindTexture(GL_TEXTURE_3D, stack_texture)
@@ -503,7 +504,7 @@ class RenderWindow(object):
        # glTexParameter(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE)
 
         glTexImage3D(GL_TEXTURE_3D, 0, GL_R8, d, h, w, 0, GL_RED, GL_UNSIGNED_BYTE, s)
-        print "made 3D texture"
+        print("made 3D texture")
         return stack_texture, s.shape
 
     def render_volume_obj(self, obj):
@@ -522,14 +523,14 @@ class RenderWindow(object):
         glCullFace(GL_BACK) #NB flipped
 
 #        glValidateProgram(vs.b_shader)
-#        print "b_valid ", glGetProgramiv(vs.b_shader, GL_VALIDATE_STATUS)
+#        print("b_valid ", glGetProgramiv(vs.b_shader, GL_VALIDATE_STATUS))
 #        print(glGetProgramInfoLog(vs.b_shader).decode())
 
         glUseProgram(vs.b_shader)
 
 
         glBindVertexArray( obj.vao )
-        print "copied", obj.elVBO.copied
+        print("copied", obj.elVBO.copied)
         obj.elVBO.bind()
 
         mv_matrix = np.dot(self.VMatrix, obj.transform)
