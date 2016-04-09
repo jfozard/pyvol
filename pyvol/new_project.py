@@ -18,13 +18,25 @@ from OpenGL.GL.shaders import *
 
 from meshutils.mesh.mesh import Mesh, calculate_vertex_normals
 
+from scipy.sparse import dok_matrix, csr_matrix
+
 import scipy.ndimage as nd
 
 from transformations import Arcball
 
+from scipy.sparse import dok_matrix, csr_matrix
+
+
 from PIL import Image
 
+from scipy.interpolate import RectBivariateSpline
+from itertools import chain
 
+import matplotlib.pyplot as plt
+
+from max_project import max_project
+
+from mesh_reproject import mesh_reproject
 
 class Obj():
     pass
@@ -83,6 +95,25 @@ class ProjectionMesh(Mesh):
     def __init__(self):
         Mesh.__init__(self)
 
+    def make_connectivity_matrix(self):
+        n = len(self.verts)
+        connections = {}
+        for t in self.tris:
+            connections[(t[0], t[1])] = 1
+            connections[(t[1], t[0])] = 1
+            connections[(t[1], t[2])] = 1
+            connections[(t[2], t[1])] = 1
+            connections[(t[2], t[0])] = 1
+            connections[(t[0], t[2])] = 1
+        A = dok_matrix((n,n))
+        A.update(connections)
+        A = A.tocsr()
+        D = A.sum(axis=1)
+        self.connectivity = A
+        self.degree = D
+#        print 'bad_verts', np.where(D==0)
+
+
     def load_ply2(self, fn):
   
         Mesh.load_ply(self, fn)
@@ -91,10 +122,16 @@ class ProjectionMesh(Mesh):
         self.bbox=(np.min(v_array,0),  np.max(v_array,0) )
  
 
-    def set_geom(self, verts, tris):
+
+    def set_geom(self, verts, tris=None):
         self.verts = np.asarray(verts, dtype=float)
-        self.tris = np.asarray(tris, dtype=int)
+        if tris is not None:
+            self.tris = np.asarray(tris, dtype=int)
+            self.make_connectivity_matrix()
+
         # Calculate mesh normals
+        self.bbox=(np.min(self.verts,0),  np.max(self.verts,0) )
+        print 'bbox', self.bbox
         self.vert_props = { 'normal': calculate_vertex_normals(self.verts, self.tris) }
 
 
@@ -106,13 +143,19 @@ class ProjectionMesh(Mesh):
         return v_out, n_out, col_out, idx_out
 
     def reproject(self, stack, spacing):
-        print 'shape', stack.shape
+        print 'shape', stack.shape, stack.strides
         print 'Stack range', np.max(stack), np.min(stack)
         print 'bbox', np.min(self.verts, axis=0), np.max(self.verts, axis=0)
-        print 'spacing', spacing
+        print 'spacing', spacing, spacing.shape
 
+        mesh_reproject(stack, mesh, spacing, -50, 10, 101)
+        
+        """
         vert_signal = np.zeros((len(self.verts),), dtype=float)
         vert_norms = self.vert_props['normal']
+
+        print 'verts shape', self.verts.shape
+        print 'vn shape', vert_norms.shape
 
         for i in range(self.verts.shape[0]):
             v = self.verts[i]
@@ -121,8 +164,8 @@ class ProjectionMesh(Mesh):
             p_end = v - 50*n
             p_start = p_start/spacing
             p_end = p_end/spacing
-#            print v, n
-#            print p_start, p_end
+            #print v, n
+            #print p_start, p_end
             tt = np.linspace(0, 1, 101)
             res = nd.map_coordinates(stack,
                                      ([(p_start[0]*(1-t) + p_end[0]*t) for t in tt],
@@ -136,9 +179,9 @@ class ProjectionMesh(Mesh):
                 print j, np.max(res)
         
         self.vert_props['signal'] = vert_signal
+        """
 
-
-    def project(self, stack, spacing, d0=0, d1=-0.1, samples=10, op=np.max):
+    def project(self, stack, spacing, d0=0, d1=-0.1, samples=10, op=np.mean):
         print 'shape', stack.shape
         print 'Stack range', np.max(stack), np.min(stack)
         print 'bbox', np.min(self.verts, axis=0), np.max(self.verts, axis=0)
@@ -148,6 +191,8 @@ class ProjectionMesh(Mesh):
         vert_signal = np.zeros((len(self.verts),), dtype=float)
         vert_norms = self.vert_props['normal']
 
+        mesh_project(stack, mesh, spacing, d0, d1, samples)
+        """
         tt = np.linspace(0, 1, samples)
         for i in range(self.verts.shape[0]):
             v = verts[i]
@@ -156,6 +201,8 @@ class ProjectionMesh(Mesh):
             p_end = v + d1*n
             p_start = p_start/spacing
             p_end = p_end/spacing
+            #print p_start, p_end
+
             vert_signal[i] = op(nd.map_coordinates(stack,
                                      ([(p_start[0]*(1-t) + p_end[0]*t) for t in tt],
                                       [(p_start[1]*(1-t) + p_end[1]*t) for t in tt],
@@ -164,7 +211,7 @@ class ProjectionMesh(Mesh):
                 print i, vert_signal[i]
         
         self.vert_props['signal'] = vert_signal
-
+        """
 
 
     def split_long_edges(self, lc):
@@ -178,10 +225,10 @@ class ProjectionMesh(Mesh):
         verts = self.verts
         tris = self.tris
         verts = [ v for v in verts ]
+        new_tris = []
         
         # Recalculate normals explicitly, reproject to get signal
 
-        new_tris = []
 
         new_point_map = {}
 
@@ -204,73 +251,74 @@ class ProjectionMesh(Mesh):
                     new_point_map[pp] = s0
                     verts.append(m0)
 
-            split.append((0, s0))
+                split.append((0, s0))
 
 
-        d1 = la.norm(x0-x2)
-        if d1>lc:
-            pp = sort_pair(i0, i2)
-            try:
-                s1 = new_point_map[pp]
-            except KeyError:
-                m1 = 0.5*(x0+x2)
-                s1 = len(verts)
-                new_point_map[pp] = s1
-                verts.append(m1)
-            split.append((1, s1))
+            d1 = la.norm(x0-x2)
+            if d1>lc:
+                pp = sort_pair(i0, i2)
+                try:
+                    s1 = new_point_map[pp]
+                except KeyError:
+                    m1 = 0.5*(x0+x2)
+                    s1 = len(verts)
+                    new_point_map[pp] = s1
+                    verts.append(m1)
+                split.append((1, s1))
 
 
 
-        d2 = la.norm(x1-x0)
-        if d2>lc:
-            pp = sort_pair(i0, i1)
-            try:
-                s2 = new_point_map[pp]
-            except KeyError:
-                m2 = 0.5*(x1+x2)
-                s2 = len(verts)
-                new_point_map[pp] = s2
-                verts.append(m2)
-            split.append((2, s2))
+            d2 = la.norm(x1-x0)
+            if d2>lc:
+                pp = sort_pair(i0, i1)
+                try:
+                    s2 = new_point_map[pp]
+                except KeyError:
+                    m2 = 0.5*(x0+x1)
+                    s2 = len(verts)
+                    new_point_map[pp] = s2
+                    verts.append(m2)
+                split.append((2, s2))
 
-        N = len(split)
-        if N==0:
-            new_tris.append(t)
-        elif N==1:
-            s = split[0][0]
-            idx_s = t[s]
-            idx_sp = t[(s+1)%3]
-            idx_sm = t[(s+2)%3]
-            idx_o = split[0][1]
-            new_tris.append((idx_s, idx_sp, idx_o))
-            new_tris.append((idx_s, idx_o, idx_sm))
-        elif N==2:
-            d = dict(split)
-            if 0 not in d:
-                s1 = d[1]
-                s2 = d[2]
-                new_tris.append((t[0], s2, s1))
-                new_tris.append((t[2], s1, s2))
-                new_tris.append((t[1], t[2], s2))
-            elif 1 not in d:
-                s0 = d[0]
-                s2 = d[2]
-                new_tris.append((t[1], s0, s2))
-                new_tris.append((t[0], s2, s0))
-                new_tris.append((t[2], t[0], s0))
-            else:
-                s0 = d[0]
-                s1 = d[1]
-                new_tris.append((t[2], s1, s0))
-                new_tris.append((t[1], s0, s1))
-                new_tris.append((t[0], t[1], s1))
-        elif N==3:
-            split_tri = [_[1] for _ in split]
-            new_tris.append((t[0], split_tri[2], split_tri[1]))
-            new_tris.append((t[1], split_tri[0], split_tri[2]))
-            new_tris.append((t[2], split_tri[1], split_tri[0]))
-            new_tris.append(split_tri)
+            N = len(split)
+            if N==0:
+                new_tris.append(t)
+            elif N==1:
+                s = split[0][0]
+                idx_s = t[s]
+                idx_sp = t[(s+1)%3]
+                idx_sm = t[(s+2)%3]
+                idx_o = split[0][1]
+                new_tris.append((idx_s, idx_sp, idx_o))
+                new_tris.append((idx_s, idx_o, idx_sm))
+            elif N==2:
+                d = dict(split)
+                if 0 not in d:
+                    s1 = d[1]
+                    s2 = d[2]
+                    new_tris.append((t[0], s2, s1))
+                    new_tris.append((t[2], s1, s2))
+                    new_tris.append((t[1], t[2], s2))
+                elif 1 not in d:
+                    s0 = d[0]
+                    s2 = d[2]
+                    new_tris.append((t[1], s0, s2))
+                    new_tris.append((t[0], s2, s0))
+                    new_tris.append((t[2], t[0], s0))
+                else:
+                    s0 = d[0]
+                    s1 = d[1]
+                    new_tris.append((t[2], s1, s0))
+                    new_tris.append((t[1], s0, s1))
+                    new_tris.append((t[0], t[1], s1))
+            elif N==3:
+                split_tri = [_[1] for _ in split]
+                new_tris.append((t[0], split_tri[2], split_tri[1]))
+                new_tris.append((t[1], split_tri[0], split_tri[2]))
+                new_tris.append((t[2], split_tri[1], split_tri[0]))
+                new_tris.append(split_tri)
 
+        
         self.set_geom(verts, new_tris)
 
 
@@ -292,10 +340,28 @@ class ProjectionMesh(Mesh):
         
         self.set_geom(verts, tris)
 
+    def mean_tri_edge_length(self):
+        verts = self.verts
+        tris = self.tris
+        edge_tot = 0.0
+        sqrt = math.sqrt
+        for t in self.tris:
+            for j in range(3):
+                d = verts[t[(j+1)%3],:] - verts[t[j],:]
+                edge_tot += sqrt(np.dot(d,d))
+        return edge_tot / (3*self.tris.shape[0])
+        
 
+    def smooth_surface(self, delta=0.05, iterations=10):
+        A = self.connectivity
+        D = self.degree
+        
+        for i in range(iterations):
+            self.verts = np.asarray((1-delta)*self.verts + delta*A.dot(self.verts)/(1e-6 + D))
+        self.set_geom(self.verts)
 
     @classmethod
-    def mesh_from_data(cls, verts, tris):
+    def from_data(cls, verts, tris):
         m = ProjectionMesh()
         m.set_geom(verts, tris)
         return m
@@ -303,23 +369,18 @@ class ProjectionMesh(Mesh):
 
 def make_surface(ps, ma, spacing, mesh2, dm=-20, dp=22):
     # write the projection surface to an off file
-    NV = len(mesh2.vertices)
-    NT = len(mesh2.tris)
 
     verts = []
     
     h = RectBivariateSpline(range(ps.shape[0]), range(ps.shape[1]), ps)
         
-    for i in range(NV):
-        v = mesh2.vertices[i]
-        x = v[0]/spacing[1]
-        y = v[1]/spacing[2]
+    for v in mesh2.verts:
+        x = v[0]/spacing[0]
+        y = v[1]/spacing[1]
 
-        Z = h(x,y)[0][0]*spacing[0]
+        Z = h(x,y)[0][0]*spacing[2]
 
-        X = x*spacing[1]
-        Y = y*spacing[2]
-        verts.append((X, Y, Z))
+        verts.append((v[0], v[1], Z))
 
     tris = []
     for t in mesh2.tris:
@@ -346,7 +407,7 @@ def make_square_triangulation(ps, spacing, m=None, n=None):
 
     for i in np.linspace(0, ps.shape[0]-1, m):
         for j in np.linspace(0, ps.shape[1]-1, n):
-            verts.append((i*spacing[1], j*spacing[2], 0.0))
+            verts.append((i*spacing[0], j*spacing[1], 0.0))
 
     print len(verts), NV
 
@@ -379,6 +440,7 @@ class Renderer(object):
         self.moving = False
         self.bfTex = None
         self.fbo = None
+        self.render_volume = True
 
     def initGL(self):
         self.ball = Arcball()
@@ -387,6 +449,7 @@ class Renderer(object):
 
         self.make_volume_shaders()
         self.make_project_shaders()
+        
         self.reshape(self.width, self.height)
 
     def make_volume_shaders(self):
@@ -650,24 +713,24 @@ class Renderer(object):
         self.project_shader = ps
 
 
-    def make_stack_obj(self, fn, spacing):
+    def make_stack_obj(self, data, spacing):
         so = Obj()
-        so.stack_texture, so.data, so.shape = self.load_stack(fn)
-        so.spacing = spacing
+        so.stack_texture, so.data, so.shape = self.load_stack(data)
+        so.spacing = np.array(spacing)
         return so
 
-    def make_volume_obj(self, fn, spacing):
+    def make_volume_obj(self, so):
         o = Obj()        
 
-        o.so = self.make_stack_obj(fn, spacing)
+        o.so = so
 
         o.vao = glGenVertexArrays(1)
         glBindVertexArray(o.vao)
         vs = self.volume_shaders
 
-        tl = np.array((shape[2]*spacing[2],
-                       shape[1]*spacing[1],
-                       shape[0]*spacing[0]))
+        tl = np.array((so.shape[2]*so.spacing[2],
+                       so.shape[1]*so.spacing[1],
+                       so.shape[0]*so.spacing[0]))
 
         vb = [ [ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                [ tl[0], 0.0, 0.0, 1.0, 0.0, 0.0],
@@ -787,7 +850,10 @@ class Renderer(object):
         
         print 'mesh centre', c, sc
         
-        tl = np.array((512*1.08, 512.0*1.08, 955*0.25))
+        #tl = np.array((512*1.08, 512.0*1.08, 955*0.25))
+        tl = np.array(o.so.spacing)*np.array(o.so.shape)
+        print o.so.spacing, o.so.shape, tl,  np.array((512*1.08, 512.0*1.08, 955*0.25))
+
         c = 0.5*tl
         sc = 1.0/la.norm(tl)
         
@@ -860,10 +926,13 @@ class Renderer(object):
         glClearColor(0.0,0.0,0.0,1.0)
 
         self.VMatrix = translate(0, 0, -self.dist).dot(self.ball.matrix()).dot(scale(self.zoom))
-        for obj in self.project_objs:
-            self.render_project_obj(obj)
-        for obj in self.volume_objs:
-            self.render_volume_obj(obj)
+        
+        if not self.render_volume:
+            for obj in self.project_objs:
+                self.render_project_obj(obj)
+        else:
+            for obj in self.volume_objs:
+                self.render_volume_obj(obj)
         glutSwapBuffers()
 
 
@@ -904,8 +973,7 @@ class Renderer(object):
 
         glBindTexture(GL_TEXTURE_2D, 0)
 
-    def load_stack(self, stack_fn):
-        data = open_tiff(stack_fn)
+    def load_stack(self, data):
 
         print('data shape', data.shape)
 
@@ -1080,25 +1148,132 @@ class Renderer(object):
             m = o.mesh
             m.reproject(o.so.data, o.so.spacing)
             self.update_project_obj(o)
+        elif k=='s':
+            o = self.project_objs[0]
+            m = o.mesh
+            m.smooth_surface()
+            self.update_project_obj(o)
+        elif k=='r':
+            o = self.project_objs[0]
+            m = o.mesh
+            print 'before - NV', m.verts.shape[0], 'NT', m.tris.shape[0]
+            m.split_long_edges(0.0)
+            print 'after  - NV', m.verts.shape[0], 'NT', m.tris.shape[0]
+            self.update_project_obj(o)
+        elif k=='t':
+            o = self.project_objs[0]
+            m = o.mesh
+            print 'before - NV', m.verts.shape[0], 'NT', m.tris.shape[0]
+            h = m.mean_tri_edge_length()
+            m.split_long_edges(1.5*h)
+            print 'after  - NV', m.verts.shape[0], 'NT', m.tris.shape[0]
+            self.update_project_obj(o)
+
+        elif k=='c':
+            o = self.project_objs[0]
+            m = o.mesh
+            m.clip_triangles(o.so.spacing[2]*o.so.shape[2]*0.95)
+            print 'NV', m.verts.shape[0]
+            self.update_project_obj(o)
+
+        elif k=='w':
+            o = self.project_objs[0]
+            m = o.mesh
+            m.project(o.so.data, o.so.spacing)
+            m.save_ply(sys.argv[2])
+        elif k==' ':
+            self.render_volume = not self.render_volume
 
         glutPostRedisplay()
 
 
-        
 
-def main():
+#from image_io.import_tiff import load_tiff_stack, stop_javabridge
+
+
+def make_sure_path_exists(path):
+    try:
+        os.makedirs(path)
+    except OSError as exception:
+        if exception.errno != errno.EEXIST:
+            raise
+    
+
+def run_tiff(ma, spacing):
+
+    spacing = [spacing[0], spacing[1], spacing[2]]
+
+    
+    pp = np.max(ma, axis=2)
+    pp = nd.gaussian_filter(pp, 1.0)
+    mask2d = pp>0.1*np.mean(pp)
+    ci, cj = nd.center_of_mass(mask2d)
+
+    area = spacing[0]*spacing[1]*np.sum(mask2d)
+
+
+    print "area " +str(area)+"\n"
+
+    cell_size = math.sqrt(area/400.0)
+    
+    cell_px = cell_size/spacing[0]
+
+    print "estimated cell_size", cell_size
+    print "estimated cell_px", cell_px
+
+
+    bl1_scale = [0.5*cell_px, 0.5*cell_px, 0.3*cell_size/spacing[2]]
+
+    bl1 = nd.gaussian_filter(ma, bl1_scale)
+
+    bl1 = np.ascontiguousarray(np.transpose(bl1, (2, 0, 1)))
+
+    ps = np.zeros((ma.shape[0], ma.shape[1]))
+
+    m = np.mean(bl1, axis=0)
+    b = 1.0
+    c = 4.7
+    t = np.maximum(b*m,c)
+    r = 0.5
+
+    max_project(bl1, t, ps)
+
+#    plt.imshow(ps)
+#    plt.show()
+ 
+    phi = np.tanh((ma.shape[0] - 1 - ps) / (0.1*(ma.shape[1]-1)))
+    bl_phi = nd.gaussian_filter(phi, r*cell_px)
+    sps = np.minimum((phi/(bl_phi+1e-6))*nd.gaussian_filter(ps, r*cell_px)+(1.0-phi)*ps, ma.shape[0]-1) 
+
+    depth = 20
+    T = make_square_triangulation(ps, spacing, int(0.25*ma.shape[0]), int(0.25*ma.shape[1]))
+    m = make_surface(ps, ma, spacing, T)
+
+    return m
+
+if __name__=='__main__':
+
+    ma = open_tiff(sys.argv[1])
+
     rw = RenderWindow()
     r = rw.renderer
     if len(sys.argv)>=5:
         spacing = map(float, sys.argv[2:5])
     else:
-        spacing = (1.0, 1.0, 1.0)
+        spacing = (1.0, 1.0, 0.25)
     r.initGL()
-    so = r.make_stack_obj(sys.argv[1], spacing)
-    mesh = ProjectionMesh()
-    mesh.load_ply2(sys.argv[2])
+
+
+    so = r.make_stack_obj(ma, spacing)
+    mesh = run_tiff(ma, spacing)
+    r.volume_objs.append(r.make_volume_obj(so))
     r.project_objs.append(r.make_project_obj(mesh, so))
+#    stop_javabridge()
     r.start()
+
+
+        
+
 
 if __name__ == '__main__': 
     main()
