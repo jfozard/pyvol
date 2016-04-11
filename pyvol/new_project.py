@@ -45,6 +45,197 @@ from mesh_reproject import mesh_reproject
 class Obj():
     pass
 
+def triangulate_polygon(pts, p, n):
+    tris = []
+    for i in range(1, len(pts)-1):
+        tris.append((0, i, i+1))
+    print 'triangulate', pts, tris
+    return tris
+
+def sorted_tuple(a, b):
+    if a>b:
+        return (b,a)
+    else:
+        return (a,b)
+
+def slice_cell(p, n, verts, tris):
+    """ 
+    Cut a triangulated cell into two pieces, by intersecting
+    it with the plane passing through point p and with normal n
+    
+    Cell defined by a list of triangles tris, each of which is
+    an integer index to the list of vertex positions (numpy vectors)
+    verts.
+
+    We need to know which triangles lie on which side of the cut
+
+    """
+
+    cut_edges = {}
+    over_tris = []
+    under_tris = []
+
+    new_verts = [v for v in verts]
+    new_poly_edges = []
+
+
+    def tri_next(i):
+        return i+1 if i<2 else 0
+
+    def tri_prev(i):
+        return i-1 if i>0 else 2
+
+
+    for t in tris:
+        h = [np.dot(verts[i]-p,n) for i in t]
+        s = [cmp(v,0) for v in h]
+        under = sum([v<0 for v in h])
+        over = sum([v>0 for v in h])
+
+        if over==0:
+
+            under_tris.append(t)
+            if under==1:
+                i = s.index(-1)
+                new_poly_edges.append((t[tri_prev(i)], t[tri_next(i)]))
+            continue
+
+
+        if under==0:
+            over_tris.append(t)
+            continue
+
+
+        if under==2:
+            i = s.index(1)
+            idx = t[i]
+            i_prev = tri_prev(i)
+            idx_prev = t[i_prev]
+            i_next = tri_next(i)
+            idx_next = t[i_next]
+            
+            st = sorted_tuple(idx_prev, idx)
+            try:
+                idx_c_prev = cut_edges[st]
+            except KeyError:
+                c_prev = (h[i_prev]*verts[idx]-h[i]*verts[idx_prev]) \
+                    /(h[i_prev]-h[i])
+                idx_c_prev = len(new_verts)
+                new_verts.append(c_prev)
+                cut_edges[st] = idx_c_prev
+
+            st = sorted_tuple(idx_next, idx)
+
+            try:
+                idx_c_next = cut_edges[st]
+            except KeyError:
+                c_next = (h[i_next]*verts[idx]-h[i]*verts[idx_next]) \
+                /(h[i_next]-h[i])
+
+                idx_c_next = len(new_verts)
+                new_verts.append(c_next)
+                cut_edges[st] = idx_c_next
+            
+            over_tris.append((idx_c_prev,idx,idx_c_next))
+            under_tris.append((idx_c_next, idx_next, idx_prev))
+            under_tris.append((idx_prev, idx_c_prev, idx_c_next))
+
+            new_poly_edges.append((idx_c_next, idx_c_prev))
+
+            continue
+
+        if over==2:
+            i = s.index(-1)
+            idx = t[i]
+            i_prev = tri_prev(i)
+            idx_prev = t[i_prev]
+            i_next = tri_next(i)
+            idx_next = t[i_next]
+            
+            st = sorted_tuple(idx_prev, idx)
+            try:
+                idx_c_prev = cut_edges[st]
+            except KeyError:
+                c_prev = (h[i_prev]*verts[idx]-h[i]*verts[idx_prev]) \
+                    /(h[i_prev]-h[i])
+                idx_c_prev = len(new_verts)
+                new_verts.append(c_prev)
+                cut_edges[st] = idx_c_prev
+
+            st = sorted_tuple(idx_next, idx)
+            try:
+                idx_c_next = cut_edges[st]
+            except KeyError:
+                c_next = (h[i_next]*verts[idx]-h[i]*verts[idx_next]) \
+                /(h[i_next]-h[i])
+
+                idx_c_next = len(new_verts)
+                new_verts.append(c_next)
+                cut_edges[st] = idx_c_next
+        
+            under_tris.append((idx_c_prev,idx,idx_c_next))
+            over_tris.append((idx_c_next, idx_next, idx_prev))
+            over_tris.append((idx_prev, idx_c_prev, idx_c_next))
+
+            new_poly_edges.append((idx_c_prev, idx_c_next))
+        
+            continue
+
+        if over+under==2:
+            i = s.index(0)
+            idx = t[i]
+            i_prev = tri_prev(i)
+            idx_prev = t[i_prev]
+            i_next = tri_next(i)
+            idx_next = t[i_next]
+
+            c = (h[i_prev]*verts[idx]-h[i]*verts[idx_prev]) \
+                /(h[i_prev]-h[i])
+            idx_c = len(new_verts)
+            new_verts.append(c)
+            
+            
+            if s[i_prev]==1:
+                over_tris.append((idx_prev, i, idx_c))
+                under_tris.append((i, idx_next, idx_c))
+                new_poly_edges.append((idx_c,i))
+            else:
+                under_tris.append((idx_prev, i, idx_c))
+                over_tris.append((i, idx_next, idx_c))
+                new_poly_edges.append((i,idx_c))
+            continue
+        raise 
+
+
+    
+    print new_poly_edges
+    ordered_polys = []
+    while new_poly_edges:
+        ordered_poly = []
+        p0 = new_poly_edges.pop()[1]
+        while new_poly_edges:
+            for q0, q1 in new_poly_edges:
+                if q0==p0:
+                    ordered_poly.append(p0)
+                    new_poly_edges.remove((q0,q1))
+                    p0 = q1
+                    break
+            else:
+                break
+        if ordered_poly:
+            ordered_poly.append(p0)
+            ordered_polys.append(ordered_poly)
+
+    print ordered_polys
+    cut_tris = []
+    for ordered_poly in ordered_polys:
+        tt = triangulate_polygon([new_verts[i] for i in ordered_poly], p, n)
+        for a,b,c in tt:
+            cut_tris.append((ordered_poly[a], ordered_poly[b], ordered_poly[c]))
+    return new_verts, under_tris+cut_tris
+
+
+
 def open_tiff(fn):
     im = Image.open(fn)
     frames = []
@@ -325,6 +516,8 @@ class ProjectionMesh(Mesh):
         
         self.set_geom(verts, new_tris)
 
+
+            
 
     def clip_triangles(self, zheight):
         # Remove triangles for which all three vertices are above zheight
@@ -967,7 +1160,9 @@ class Renderer(object):
                [ tl[0], 0.0, tl[2], 1.0-dx, 0.0+dy, 1.0-dz],
                [ 0.0, tl[1], tl[2], 0.0+dx, 1.0-dy, 1.0-dz],
                [ tl[0], tl[1], tl[2], 1.0-dx, 1.0-dy, 1.0-dz] ]
-        
+
+        o.orig_vb = np.array(vb)
+
         vb = np.array(vb, dtype=np.float32)
         vb = vb.flatten()
         
@@ -978,6 +1173,10 @@ class Renderer(object):
                             [0, 6, 2], [0, 4, 6],
                             [5, 6, 4], [5, 7, 6]]
                             , dtype=np.uint32)        
+
+
+        o.orig_idx = idx_out
+
         o.vtVBO=VBO(vb)
 
         print('made VBO')
@@ -1008,8 +1207,48 @@ class Renderer(object):
 
         o.transform = np.array(( (0.0, 0.0, sc, -sc*c[2]), (0.0, sc, 0.0, -sc*c[1]),  (sc, 0.0, 0.0, -sc*c[0]), (0.0, 0.0, 0.0, 1.0)))
 
+        o.tex_transform = np.array( (((1.0-2*dx)/tl[0], 0.0, 0.0, dx), 
+                                       ( 0.0, (1.0-2*dy)/tl[1], 0.0, dy),
+                                       ( 0.0, 0.0, (1.0-2*dz)/tl[2], dz),
+                                       ( 0.0, 0.0, 0.0, 1.0) ))
+
+
         return o
 
+
+    def clip_volume_obj(self, obj):
+        verts = obj.orig_vb[:,:3]
+        tris = obj.orig_idx
+        transform = obj.transform
+        inv_transform = la.inv(transform)
+        norm_transform = transform[:3,:3].T
+        for p, n in self.clip_planes:
+            # Transform back
+            p = np.dot(inv_transform, np.hstack((p,[1])))[:3]
+            n = np.dot(norm_transform, n)
+            print 'new_coords', p, n
+            verts, tris = slice_cell(p, n, verts, tris)
+        tex_transform = obj.tex_transform
+        verts = np.array(verts)
+        print tex_transform.shape, verts.shape
+
+        tex_coords = np.dot(tex_transform, np.vstack((verts.T, np.ones((1,verts.shape[0])))))[:3,:]
+#        quit()
+
+#        tex_coords = np.dot(tex_transform, ))[:,:3]
+        print verts
+
+        vb = np.concatenate((verts,tex_coords.T),axis=1).astype(np.float32)
+        idx_out = np.array(tris, dtype=np.uint32)
+        print idx_out
+
+        obj.vtVBO.bind()
+        obj.vtVBO.set_array(vb)
+        obj.vtVBO.copy_data()
+        obj.vtVBO.unbind()
+
+        obj.elVBO.set_array(idx_out)
+        obj.elCount = len(idx_out.flatten())
 
 
     def make_project_obj(self, mesh, so):
@@ -1708,11 +1947,18 @@ if __name__=='__main__':
     r.initGL()
 
 
+
     so = r.make_stack_obj(ma, spacing)
 #    mesh = run_tiff(ma, spacing)
     r.solid_objs.append(r.make_solid_obj(make_iso_surface(50, ma, spacing)))
     
-    r.volume_objs.append(r.make_volume_obj(so))
+    vo = r.make_volume_obj(so)
+    r.volume_objs.append(vo)
+    r.clip_planes.append((np.array((0.,0.,0.)),np.array((1.,1.,1.))))
+    
+    
+    r.clip_volume_obj(vo)
+
 #    r.project_objs.append(r.make_project_obj(mesh, so))
 #    stop_javabridge()
     r.start()
