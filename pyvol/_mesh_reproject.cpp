@@ -1,6 +1,6 @@
 
 
-#include <eigen3/Eigen/Core>
+#include "eigen3/Eigen/Core"
 #include <omp.h>
 
 double sample3D(unsigned char * A, int I, int J, int K, const Eigen::Vector3d& p)

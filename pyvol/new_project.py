@@ -432,7 +432,7 @@ class RenderWindow(object):
         glutInit([])
         glutInitContextVersion(3, 2)
         glutInitWindowSize(800, 600)
-        glutInitDisplayMode(GLUT_RGBA | GLUT_DEPTH)
+        glutInitDisplayMode(GLUT_RGBA | GLUT_DEPTH |GLUT_DOUBLE)
         self.window = glutCreateWindow("Cell surface")
         self.renderer = Renderer()
 
@@ -445,6 +445,7 @@ class Renderer(object):
         self.volume_objs = []
         self.project_objs = []
         self.solid_objs = []
+        self.clip_planes = []
         self.moving = False
         self.bfTex = None
         self.fbo = None
@@ -490,11 +491,13 @@ class Renderer(object):
             varying vec4 v_pos;
 
             uniform float isolevel;
-            uniform vec3 color;
+//            uniform vec3 color;
 
             uniform sampler2D backfaceTex;            
             uniform sampler3D texture_3d;
             const float falloff = 0.995;
+
+            uniform mat4 mv_matrix;
 
             const float eps = 0.001;
 
@@ -512,7 +515,7 @@ class Renderer(object):
                 vec3 startPos = texture2D(backfaceTex, texc).rgb;
                 vec3 ray = endPos - startPos;
                 float rayLength = length(ray);
-                vec3 step = normalize(ray)*(2.0/600.0);
+                vec3 step = normalize(ray)*(2.0/1200.0);
                 vec4 col;
                 float sample;
                 vec3 samplePos = vec3(0,0,0); 
@@ -524,8 +527,9 @@ class Renderer(object):
                     }
                     sample = texture3D(texture_3d, startPos + samplePos).x;
                     if(sample>isolevel) {
-                         vec3 n = normalize(normal_calc(startPos + samplePos, sample));
-                         col = vec4(0.25*(3.0+n.x)*color, 1.0);
+                         vec3 n = normal_calc(startPos + samplePos, sample);
+                         n = normalize((mv_matrix * vec4(n, 0.0)).xyz);
+                         col = vec4(0.5*(1.0+n.x)*vec3((startPos+samplePos).x, (startPos+samplePos).y, 1.0), 1.0);
                          gl_FragColor = col;
                          break;
                     }
@@ -587,9 +591,9 @@ class Renderer(object):
             )
 
 
-        vis.f_color_location = glGetUniformLocation(
-            vis.f_shader, 'color'
-            )
+#        vis.f_color_location = glGetUniformLocation(
+#            vis.f_shader, 'color'
+#            )
         vis.f_level_location = glGetUniformLocation(
             vis.f_shader, 'isolevel'
             )
@@ -1006,6 +1010,8 @@ class Renderer(object):
 
         return o
 
+
+
     def make_project_obj(self, mesh, so):
 
         o = Obj()
@@ -1237,6 +1243,7 @@ class Renderer(object):
         else:
             for obj in self.volume_objs:
                 self.render_volume_iso_obj(obj)
+        print 'draw'
         glutSwapBuffers()
 
 
@@ -1442,7 +1449,7 @@ class Renderer(object):
         glUniformMatrix4fv(vs.f_p_location, 1, True, self.PMatrix.astype('float32'))
 
         glUniform1f(vs.f_level_location, self.threshold/255.0)
-        glUniform3f(vs.f_color_location, 1.0, 0.0, 1.0)
+#        glUniform3f(vs.f_color_location, 1.0, 0.0, 1.0)
 
         glDrawElements(
                 GL_TRIANGLES, obj.elCount,
@@ -1687,6 +1694,11 @@ if __name__=='__main__':
 
     ma = open_tiff(sys.argv[1])
 
+ #   ma = nd.zoom(ma, 0.5)
+#    
+    ma = np.array(ma[::2,::2,::2])
+    ma = nd.gaussian_filter(ma, 0.5)
+
     rw = RenderWindow()
     r = rw.renderer
     if len(sys.argv)>=5:
@@ -1697,8 +1709,8 @@ if __name__=='__main__':
 
 
     so = r.make_stack_obj(ma, spacing)
-    mesh = run_tiff(ma, spacing)
-#    r.solid_objs.append(r.make_solid_obj(make_iso_surface(50, ma, spacing)))
+#    mesh = run_tiff(ma, spacing)
+    r.solid_objs.append(r.make_solid_obj(make_iso_surface(50, ma, spacing)))
     
     r.volume_objs.append(r.make_volume_obj(so))
 #    r.project_objs.append(r.make_project_obj(mesh, so))
