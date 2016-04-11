@@ -16,7 +16,9 @@ from OpenGL.GL.ARB.texture_rg import *
 from OpenGL.GL.framebufferobjects import *
 from OpenGL.GL.shaders import *
 
-from meshutils.mesh.mesh import Mesh, calculate_vertex_normals
+from meshutils.mesh.mesh import Mesh
+
+from vertex_normals import calculate_vertex_normals
 
 from scipy.sparse import dok_matrix, csr_matrix
 
@@ -26,6 +28,8 @@ from transformations import Arcball
 
 from scipy.sparse import dok_matrix, csr_matrix
 
+
+from gen_mesh import make_iso
 
 from PIL import Image
 
@@ -126,8 +130,8 @@ class ProjectionMesh(Mesh):
     def set_geom(self, verts, tris=None):
         self.verts = np.asarray(verts, dtype=float)
         if tris is not None:
-            self.tris = np.asarray(tris, dtype=int)
-            self.make_connectivity_matrix()
+            self.tris = np.asarray(tris, dtype=np.uint32)
+#            self.make_connectivity_matrix()
 
         # Calculate mesh normals
         self.bbox=(np.min(self.verts,0),  np.max(self.verts,0) )
@@ -391,8 +395,12 @@ def make_surface(ps, ma, spacing, mesh2, dm=-20, dp=22):
 
     return m
 
-
-
+def make_iso_surface(level, ma, spacing):
+    verts, tris = make_iso(ma, level)
+    verts = verts * np.array(spacing, dtype=np.float32)[np.newaxis,:]
+    m = ProjectionMesh.from_data(verts, tris)
+    return m
+    
 def make_square_triangulation(ps, spacing, m=None, n=None):
 
     if m==None:
@@ -440,7 +448,8 @@ class Renderer(object):
         self.moving = False
         self.bfTex = None
         self.fbo = None
-        self.render_volume = True
+        self.render_volume = False
+        self.threshold=50
 
     def initGL(self):
         self.ball = Arcball()
@@ -448,9 +457,145 @@ class Renderer(object):
         self.dist = 2.0
 
         self.make_volume_shaders()
+        self.make_volume_shaders_iso()
         self.make_project_shaders()
-        
+        self.make_solid_shaders()
+
         self.reshape(self.width, self.height)
+
+    def make_volume_shaders_iso(self):
+
+        vis = Obj()
+        vertex = compileShader(
+            """
+	    attribute vec3 position;
+	    attribute vec3 texcoord;
+
+            varying vec3 v_texcoord;
+            varying vec4 v_pos;
+
+            uniform mat4 mv_matrix;
+            uniform mat4 p_matrix;
+	    void main() {
+                vec4 eye =  mv_matrix * vec4(position,1.0);
+		v_pos = p_matrix * eye;
+                gl_Position = v_pos;
+                v_texcoord = texcoord;
+	    }""",
+            GL_VERTEX_SHADER)
+        
+        front_fragment = compileShader(
+            """
+            varying vec3 v_texcoord;
+            varying vec4 v_pos;
+
+            uniform float isolevel;
+            uniform vec3 color;
+
+            uniform sampler2D backfaceTex;            
+            uniform sampler3D texture_3d;
+            const float falloff = 0.995;
+
+            const float eps = 0.001;
+
+            vec3 normal_calc(vec3 p, float u) {
+                float dx = texture3D(texture_3d, p + vec3(eps,0,0)).x - u;
+                float dy = texture3D(texture_3d, p + vec3(0,eps,0)).x - u;
+                float dz = texture3D(texture_3d, p + vec3(0,0,eps)).x - u;
+                return vec3(dx, dy, dz);
+              
+            }
+
+	    void main() {
+                vec2 texc = (v_pos.xy/v_pos.w +1.0)/2.0; //((/gl_FragCoord.w) + 1) / 2;
+                vec3 endPos = v_texcoord;
+                vec3 startPos = texture2D(backfaceTex, texc).rgb;
+                vec3 ray = endPos - startPos;
+                float rayLength = length(ray);
+                vec3 step = normalize(ray)*(2.0/600.0);
+                vec4 col;
+                float sample;
+                vec3 samplePos = vec3(0,0,0); 
+                while(true)
+                {
+                    if ((length(samplePos) >= rayLength)) {
+                        col = vec4(1.0,0.0,0.0,1.0);
+                        discard;
+                    }
+                    sample = texture3D(texture_3d, startPos + samplePos).x;
+                    if(sample>isolevel) {
+                         vec3 n = normalize(normal_calc(startPos + samplePos, sample));
+                         col = vec4(0.25*(3.0+n.x)*color, 1.0);
+                         gl_FragColor = col;
+                         break;
+                    }
+                    samplePos += step;
+                }
+
+	    }""",
+            GL_FRAGMENT_SHADER)
+
+
+        back_fragment = compileShader(
+            """
+            varying vec3 v_texcoord;            
+
+	    void main() {
+                    gl_FragColor = vec4(v_texcoord,1.0);
+	    }""",
+            GL_FRAGMENT_SHADER)
+            
+        vis.b_shader = link_shader_program(vertex, back_fragment)
+
+        vis.b_position_location = glGetAttribLocation( 
+            vis.b_shader, 'position' 
+            )
+        vis.b_texcoord_location = glGetAttribLocation( 
+            vis.b_shader, 'texcoord' 
+            )
+
+        vis.b_mv_location = glGetUniformLocation(
+            vis.b_shader, 'mv_matrix'
+            )
+        vis.b_p_location = glGetUniformLocation(
+            vis.b_shader, 'p_matrix'
+            )
+
+        vis.vStride = 6*4
+
+        vis.f_shader = link_shader_program(vertex, front_fragment)
+
+        vis.f_position_location = glGetAttribLocation( 
+            vis.f_shader, 'position' 
+            )
+        vis.f_texcoord_location = glGetAttribLocation( 
+            vis.f_shader, 'texcoord' 
+            )
+
+        vis.f_mv_location = glGetUniformLocation(
+            vis.f_shader, 'mv_matrix'
+            )
+        vis.f_p_location = glGetUniformLocation(
+            vis.f_shader, 'p_matrix'
+            )
+
+        vis.f_bfTex_location = glGetUniformLocation(
+            vis.f_shader, 'backfaceTex'
+            )
+        vis.f_t3d_location = glGetUniformLocation(
+            vis.f_shader, 'texture3d'
+            )
+
+
+        vis.f_color_location = glGetUniformLocation(
+            vis.f_shader, 'color'
+            )
+        vis.f_level_location = glGetUniformLocation(
+            vis.f_shader, 'isolevel'
+            )
+
+        self.volume_iso_shaders = vis
+
 
     def make_volume_shaders(self):
 
@@ -484,15 +629,15 @@ class Renderer(object):
 
 	    void main() {
                 vec2 texc = (v_pos.xy/v_pos.w +1.0)/2.0; //((/gl_FragCoord.w) + 1) / 2;
-                vec3 startPos = v_texcoord;
-                vec3 endPos = texture2D(backfaceTex, texc).rgb;
+                vec3 endPos = v_texcoord;
+                vec3 startPos = texture2D(backfaceTex, texc).rgb;
                 vec3 ray = endPos - startPos;
                 float rayLength = length(ray);
                 vec3 step = normalize(ray)*(2.0/600.0);
                 vec4 colAcc = vec4(0,0,0,0);
                 float sample;
                 vec3 samplePos = vec3(0,0,0); 
-                for (int i=0; i<1000; i++)
+                for (int i=0; i<600; i++)
                 {
                     sample = texture3D(texture_3d, endPos - samplePos).x;
                     colAcc.rgb = mix(colAcc.rgb, vec3(1.0, 0.0, 0.0), sample*0.1);
@@ -564,6 +709,9 @@ class Renderer(object):
             vs.f_shader, 'texture3d'
             )
         self.volume_shaders = vs
+
+
+
 
     def make_project_shaders(self):
 
@@ -712,6 +860,77 @@ class Renderer(object):
         ps.vStride = 9*4
         self.project_shader = ps
 
+    def make_solid_shaders(self):
+
+        ss = Obj()
+
+        solid_vertex = compileShader(
+            """
+            attribute vec3 position;
+	    attribute vec3 normal;
+            attribute vec3 color;
+            
+            varying vec3 v_normal;
+            varying vec3 v_color;
+
+            uniform mat4 mv_matrix;
+            uniform mat4 p_matrix;
+
+
+	    void main() {
+                vec4 eye =  mv_matrix * vec4(position, 1.0);
+                v_color = color;
+                v_normal = (mv_matrix * vec4(normal, 0.0)).xyz;
+                gl_Position = p_matrix * eye;
+
+	    }""",
+            GL_VERTEX_SHADER)
+        
+        solid_fragment = compileShader(
+            """
+            varying vec3 v_color;
+            varying vec3 v_normal;
+
+            const vec3 light_direction = vec3(0., 0., -1.);       
+            const vec4 light_diffuse = vec4(0.7, 0.7, 0.7, 0.0);
+            const vec4 light_ambient = vec4(0.3, 0.3, 0.3, 1.0);   
+
+            void main() {
+                // Find surface color
+                vec3 normal = normalize(v_normal);
+                vec4 diffuse_factor = max(-dot(normal, light_direction), 0.0) * light_diffuse;
+                vec4 diffuse_color = (diffuse_factor + light_ambient)*vec4(v_color, 1.0);
+                // Combine surface and projected color
+                gl_FragColor = diffuse_color;
+                
+	    }""",
+            GL_FRAGMENT_SHADER)
+
+        ss.shader = link_shader_program(solid_vertex, solid_fragment)
+
+        ss.position_location = glGetAttribLocation( 
+            ss.shader, 'position' 
+            )
+
+        ss.normal_location = glGetAttribLocation( 
+            ss.shader, 'normal' 
+            )
+
+        ss.color_location = glGetAttribLocation( 
+            ss.shader, 'color' 
+            )
+
+        ss.mv_location = glGetUniformLocation(
+            ss.shader, 'mv_matrix'
+            )
+        ss.p_location = glGetUniformLocation(
+            ss.shader, 'p_matrix'
+            )
+
+
+        ss.vStride = 9*4
+        self.solid_shader = ss
+
 
     def make_stack_obj(self, data, spacing):
         so = Obj()
@@ -731,15 +950,19 @@ class Renderer(object):
         tl = np.array((so.shape[2]*so.spacing[2],
                        so.shape[1]*so.spacing[1],
                        so.shape[0]*so.spacing[0]))
+        
+        dx = 0.5/so.shape[2] 
+        dy = 0.5/so.shape[1] 
+        dz = 0.5/so.shape[0] 
 
-        vb = [ [ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-               [ tl[0], 0.0, 0.0, 1.0, 0.0, 0.0],
-               [ 0.0, tl[1], 0.0, 0.0, 1.0, 0.0],
-               [ tl[0], tl[1], 0.0, 1.0, 1.0, 0.0],
-               [ 0.0, 0.0, tl[2], 0.0, 0.0, 1.0],
-               [ tl[0], 0.0, tl[2], 1.0, 0.0, 1.0],
-               [ 0.0, tl[1], tl[2], 0.0, 1.0, 1.0],
-               [ tl[0], tl[1], tl[2], 1.0, 1.0, 1.0] ]
+        vb = [ [ 0.0, 0.0, 0.0, 0.0+dx, 0.0+dy, 0.0+dz],
+               [ tl[0], 0.0, 0.0, 1.0-dx, 0.0+dy, 0.0+dz],
+               [ 0.0, tl[1], 0.0, 0.0+dx, 1.0-dy, 0.0+dz],
+               [ tl[0], tl[1], 0.0, 1.0-dx, 1.0-dy, 0.0+dz],
+               [ 0.0, 0.0, tl[2], 0.0+dx, 0.0+dy, 1.0-dz],
+               [ tl[0], 0.0, tl[2], 1.0-dx, 0.0+dy, 1.0-dz],
+               [ 0.0, tl[1], tl[2], 0.0+dx, 1.0-dy, 1.0-dz],
+               [ tl[0], tl[1], tl[2], 1.0-dx, 1.0-dy, 1.0-dz] ]
         
         vb = np.array(vb, dtype=np.float32)
         vb = vb.flatten()
@@ -861,9 +1084,88 @@ class Renderer(object):
 #        o.tex_transform = np.array(((1.0/tl[0], 0.0, 0.0, 0.0), (0.0, 1.0/tl[1], 0.0, 0.0), (0.0, 0.0, 1.0/tl[2], 0.0), (0.0, 0.0, 0.0, 1.0)))
         o.tex_transform = np.array(( (0.0, 0.0, 1.0/tl[2], 0.0),(0.0, 1.0/tl[0], 0.0, 0.0), (1.0/tl[1], 0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0)))
 
-
         return o
 
+
+
+    def make_solid_obj(self, mesh):
+
+        o = Obj()
+        o.mesh = mesh
+
+        v_out, n_out, col_out, idx_out  = o.mesh.generate_arrays_projection()
+
+        vb=np.concatenate((v_out,n_out,col_out),axis=1)
+
+        vao = glGenVertexArrays(1)
+
+        glBindVertexArray(vao)
+        print "made VAO"
+        
+        o.mesh_vtVBO=VBO(vb)
+
+        print 'made VBO'
+        o.mesh_vtVBO.bind()
+
+        ss = self.solid_shader
+
+        glEnableVertexAttribArray( ss.position_location )
+        glVertexAttribPointer( 
+            ss.position_location, 
+            3, GL_FLOAT, False, ss.vStride, o.mesh_vtVBO 
+            )
+
+        glEnableVertexAttribArray( ss.normal_location )
+        glVertexAttribPointer( 
+            ss.normal_location, 
+            3, GL_FLOAT, False, ss.vStride, o.mesh_vtVBO+12
+            )
+
+        glEnableVertexAttribArray( ss.color_location )
+        glVertexAttribPointer( 
+            ss.color_location, 
+            3, GL_FLOAT, False, ss.vStride, o.mesh_vtVBO+24
+            )
+
+
+        glBindVertexArray( 0 )
+        glDisableVertexAttribArray( ss.position_location )
+        glDisableVertexAttribArray( ss.normal_location )
+        glDisableVertexAttribArray( ss.color_location )
+        glBindBuffer(GL_ARRAY_BUFFER, 0)
+
+
+        o.mesh_elVBO=VBO(idx_out, target=GL_ELEMENT_ARRAY_BUFFER)
+        o.mesh_elCount=len(idx_out.flatten())
+        o.mesh_vao = vao
+
+        glBindBuffer(GL_ARRAY_BUFFER, 0)
+
+        print o.mesh_elCount
+
+        print 'made obj', vao
+        
+        bbox = o.mesh.bbox
+
+        print 'mesh bbox', o.mesh.bbox
+        c = 0.5*(bbox[1] + bbox[0])
+        sc = 1.0/la.norm(bbox[1] - bbox[0])
+        
+        print 'mesh centre', c, sc
+        
+        #tl = np.array((512*1.08, 512.0*1.08, 955*0.25))
+#        tl = np.array(o.so.spacing)*np.array(o.so.shape)
+#        print o.so.spacing, o.so.shape, tl,  np.array((512*1.08, 512.0*1.08, 955*0.25))
+
+#        c = 0.5*tl
+#        sc = 1.0/la.norm(tl)
+        
+        o.transform = np.array(((sc, 0.0, 0.0, -sc*c[0]), (0.0, sc, 0.0, -sc*c[1]), (0.0, 0.0, sc, -sc*c[2]), (0.0, 0.0, 0.0, 1.0)))
+#        o.tex_transform = np.array(((1.0/tl[0], 0.0, 0.0, 0.0), (0.0, 1.0/tl[1], 0.0, 0.0), (0.0, 0.0, 1.0/tl[2], 0.0), (0.0, 0.0, 0.0, 1.0)))
+#        o.tex_transform = np.array(( (0.0, 0.0, 1.0/tl[2], 0.0),(0.0, 1.0/tl[0], 0.0, 0.0), (1.0/tl[1], 0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0)))
+
+
+        return o
 
 
     def update_project_obj(self, o):
@@ -928,11 +1230,13 @@ class Renderer(object):
         self.VMatrix = translate(0, 0, -self.dist).dot(self.ball.matrix()).dot(scale(self.zoom))
         
         if not self.render_volume:
+            for obj in self.solid_objs:
+                self.render_solid_obj(obj)
             for obj in self.project_objs:
                 self.render_project_obj(obj)
         else:
             for obj in self.volume_objs:
-                self.render_volume_obj(obj)
+                self.render_volume_iso_obj(obj)
         glutSwapBuffers()
 
 
@@ -995,9 +1299,9 @@ class Renderer(object):
 
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
 
-       # glTexParameter(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
-       # glTexParameter(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
-       # glTexParameter(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE)
+#        glTexParameter(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+#        glTexParameter(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+#        glTexParameter(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE)
 
         glTexImage3D(GL_TEXTURE_3D, 0, GL_R8, d, h, w, 0, GL_RED, GL_UNSIGNED_BYTE, s)
         print("made 3D texture")
@@ -1016,7 +1320,7 @@ class Renderer(object):
         glEnable(GL_CULL_FACE)
 
         
-        glCullFace(GL_BACK) #NB flipped
+        glCullFace(GL_FRONT) #NB flipped
 
         glUseProgram(vs.b_shader)
 
@@ -1055,13 +1359,90 @@ class Renderer(object):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
 
         glEnable(GL_CULL_FACE)
-        glCullFace(GL_FRONT) 
+        glCullFace(GL_BACK) 
 
         glBindVertexArray(obj.vao)
         obj.elVBO.bind()
 
         glUniformMatrix4fv(vs.f_mv_location, 1, True, mv_matrix.astype('float32'))
         glUniformMatrix4fv(vs.f_p_location, 1, True, self.PMatrix.astype('float32'))
+
+        glDrawElements(
+                GL_TRIANGLES, obj.elCount,
+                GL_UNSIGNED_INT, obj.elVBO
+            )
+
+        glActiveTexture(GL_TEXTURE0+1)
+        glBindTexture(GL_TEXTURE_2D, 0)
+
+        glCullFace(GL_BACK) 
+        obj.elVBO.unbind()
+        glBindVertexArray( 0 )
+        glUseProgram(0)
+
+
+    def render_volume_iso_obj(self, obj):
+
+        vs = self.volume_iso_shaders
+        glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
+        glViewport(0, 0, self.width, self.height)
+        glActiveTexture(GL_TEXTURE0)
+        glBindTexture(GL_TEXTURE_3D, obj.so.stack_texture)
+
+        glClear(GL_COLOR_BUFFER_BIT)
+
+        glEnable(GL_CULL_FACE)
+
+        
+        glCullFace(GL_FRONT) #NB flipped
+
+        glUseProgram(vs.b_shader)
+
+        glBindVertexArray( obj.vao )
+        print("copied", obj.elVBO.copied)
+        obj.elVBO.bind()
+
+        mv_matrix = np.dot(self.VMatrix, obj.transform)
+        glUniformMatrix4fv(vs.b_mv_location, 1, True, mv_matrix.astype('float32'))
+        glUniformMatrix4fv(vs.b_p_location, 1, True, self.PMatrix.astype('float32'))
+
+        glDrawElements(
+                GL_TRIANGLES, obj.elCount,
+                GL_UNSIGNED_INT, obj.elVBO
+            )
+
+        obj.elVBO.unbind()
+        glBindVertexArray( 0 )
+        glUseProgram(0)
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0)
+
+        glActiveTexture(GL_TEXTURE0+1)
+        glBindTexture(GL_TEXTURE_2D, self.bfTex)
+
+        glActiveTexture(GL_TEXTURE0)
+        glBindTexture(GL_TEXTURE_3D, obj.so.stack_texture)
+
+
+        glUseProgram(vs.f_shader)
+
+        glUniform1i(vs.f_t3d_location, 0)
+        glUniform1i(vs.f_bfTex_location, 1)
+
+
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
+
+        glEnable(GL_CULL_FACE)
+        glCullFace(GL_BACK) 
+
+        glBindVertexArray(obj.vao)
+        obj.elVBO.bind()
+
+        glUniformMatrix4fv(vs.f_mv_location, 1, True, mv_matrix.astype('float32'))
+        glUniformMatrix4fv(vs.f_p_location, 1, True, self.PMatrix.astype('float32'))
+
+        glUniform1f(vs.f_level_location, self.threshold/255.0)
+        glUniform3f(vs.f_color_location, 1.0, 0.0, 1.0)
 
         glDrawElements(
                 GL_TRIANGLES, obj.elCount,
@@ -1136,6 +1517,51 @@ class Renderer(object):
         glUseProgram(0)
 
 
+    def render_solid_obj(self, obj):
+
+
+#        glActiveTexture(GL_TEXTURE0)
+#        glEnable(GL_TEXTURE_3D)
+#        glBindTexture(GL_TEXTURE_3D, obj.stack.stack_texture)
+
+        glDepthMask(True)
+
+#        print self.bfTex, self.stack_texture
+
+        ss = self.solid_shader
+
+  
+        glUseProgram(ss.shader)
+
+
+        glEnable(GL_DEPTH_TEST)
+        glEnable(GL_CULL_FACE)
+
+#        glPolygonMode( GL_FRONT_AND_BACK, GL_LINE )
+
+        glBindVertexArray( obj.mesh_vao )
+
+        obj.mesh_elVBO.bind()
+
+
+        mv_matrix = np.dot(self.VMatrix, obj.transform)
+
+        glUniformMatrix4fv(ss.mv_location, 1, True, mv_matrix.astype('float32'))
+        glUniformMatrix4fv(ss.p_location, 1, True, self.PMatrix.astype('float32'))
+
+#        print 'start_draw'
+        glDrawElements(
+                GL_TRIANGLES, obj.mesh_elCount,
+                GL_UNSIGNED_INT, obj.mesh_elVBO
+            )
+#        print 'done_draw'
+
+
+        obj.mesh_elVBO.unbind()
+        glBindVertexArray( 0 )
+        glUseProgram(0)
+
+
 
 
     def key(self, k, x, y):
@@ -1175,6 +1601,10 @@ class Renderer(object):
             m.clip_triangles(o.so.spacing[2]*o.so.shape[2]*0.95)
             print 'NV', m.verts.shape[0]
             self.update_project_obj(o)
+        elif k=='u':
+            self.threshold += 1
+        elif k=='y':
+            self.threshold -= 1
 
         elif k=='w':
             o = self.project_objs[0]
@@ -1183,6 +1613,8 @@ class Renderer(object):
             m.save_ply(sys.argv[2])
         elif k==' ':
             self.render_volume = not self.render_volume
+        elif k=='q':
+            quit()
 
         glutPostRedisplay()
 
@@ -1266,8 +1698,10 @@ if __name__=='__main__':
 
     so = r.make_stack_obj(ma, spacing)
     mesh = run_tiff(ma, spacing)
+#    r.solid_objs.append(r.make_solid_obj(make_iso_surface(50, ma, spacing)))
+    
     r.volume_objs.append(r.make_volume_obj(so))
-    r.project_objs.append(r.make_project_obj(mesh, so))
+#    r.project_objs.append(r.make_project_obj(mesh, so))
 #    stop_javabridge()
     r.start()
 

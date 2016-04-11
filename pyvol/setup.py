@@ -11,6 +11,25 @@ ext_modules=[
               extra_link_args=['-fopenmp'],
     ),
 
+    Extension("max_project",
+              sources=["max_project.pyx"],
+              extra_compile_args=['-O3', '-march=native', '--fast-math'],
+              libraries=["m"], # Unix-like specific
+    ),
+
+    Extension("gen_mesh",
+              sources=["gen_mesh.pyx", "_gen_mesh.cpp"],
+              extra_compile_args=['-O3', '-march=native', '--fast-math', '-fopenmp', '--std=c++11'],
+              libraries=["m"], # Unix-like specific
+              extra_link_args=['-fopenmp'],
+    ),
+    Extension("vertex_normals",
+              sources=["vertex_normals.pyx"],
+              extra_compile_args=['-O3', '-march=native', '--fast-math', '-fopenmp'],
+              libraries=["m"], # Unix-like specific
+              extra_link_args=['-fopenmp'],
+    ),
+
 
 
 ]
