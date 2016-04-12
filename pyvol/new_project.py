@@ -643,7 +643,11 @@ class Renderer(object):
         self.bfTex = None
         self.fbo = None
         self.render_volume = False
+
         self.threshold=50
+
+        self.marker = None
+        self.mouse_add_marker = False
 
     def initGL(self):
         self.ball = Arcball()
@@ -1435,10 +1439,42 @@ class Renderer(object):
         pass
 
     def on_mouse_button(self, b, s, x, y):
-        self.moving = not s
-        self.ex, self.ey = x, y
-        self.ball.down([x,y])
+        if self.mouse_add_marker:
+            if s:
+                self.add_marker(x, y)
+        else:
+            self.moving = not s
+            self.ex, self.ey = x, y
+            self.ball.down([x,y])
 
+    def add_marker(self, x, y):
+        w = self.width
+        h = self.height
+
+        mouse_x = -1.0+2*x/float(w)
+        mouse_y = -1.0+2*(h - y)/float(h)
+        print 'mouse', (mouse_x, mouse_y)
+        transform2 = la.inv(self.PMatrix.dot(self.VMatrix))
+        zNear = -1.0
+        zFar = 1.0
+        p0 = transform2.dot(np.array((mouse_x, mouse_y, zNear, 1.0)))
+        p1 = transform2.dot(np.array((mouse_x, mouse_y, zFar, 1.0)))
+        p0 /= p0[3]
+        p1 /= p1[3]
+        start = np.array(p0[:3], dtype=np.float32)
+        end  = np.array(p1[:3], dtype = np.float32)
+        print start, end
+
+        if self.marker is not None:
+            p = start
+            n = np.cross(end - start, self.marker - start)
+            self.clip_planes.append((p,n))
+            self.clip_volume_obj(self.volume_objs[0])
+            self.mouse_add_marker = False
+        else:
+            self.marker = start
+
+        
     def on_mouse_wheel(self, b, d, x, y):
         self.dist += self.dist/15.0 * d;
         glutPostRedisplay()
@@ -1808,6 +1844,7 @@ class Renderer(object):
         glUseProgram(0)
 
 
+    
 
 
     def key(self, k, x, y):
@@ -1851,7 +1888,9 @@ class Renderer(object):
             self.threshold += 1
         elif k=='y':
             self.threshold -= 1
-
+        elif k=='m':
+            self.mouse_add_marker = True
+            self.marker = None
         elif k=='w':
             o = self.project_objs[0]
             m = o.mesh
@@ -1935,8 +1974,8 @@ if __name__=='__main__':
 
  #   ma = nd.zoom(ma, 0.5)
 #    
-    ma = np.array(ma[::2,::2,::2])
-    ma = nd.gaussian_filter(ma, 0.5)
+#    ma = np.array(ma[::2,::2,::2])
+    ma = nd.gaussian_filter(ma, 1)
 
     rw = RenderWindow()
     r = rw.renderer
@@ -1954,7 +1993,7 @@ if __name__=='__main__':
     
     vo = r.make_volume_obj(so)
     r.volume_objs.append(vo)
-    r.clip_planes.append((np.array((0.,0.,0.)),np.array((1.,1.,1.))))
+#    r.clip_planes.append((np.array((0.,0.,0.)),np.array((1.,1.,1.))))
     
     
     r.clip_volume_obj(vo)
