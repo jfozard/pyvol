@@ -33,7 +33,7 @@ def calculate_vertex_normals(double[:,:] verts, unsigned int[:,:] tris):
                 d1[j] = verts[i2,j] - verts[i0,j]
             nA[0] = d0[1]*d1[2] - d0[2]*d1[1]
             nA[1] = d0[2]*d1[0] - d0[0]*d1[2]
-            nA[2] = d0[0]*d1[1] - d0[2]*d1[0]
+            nA[2] = d0[0]*d1[1] - d0[1]*d1[0]
             for j in range(3):
                 count[tris[i,j]] += 1.0
                 for k in range(3):

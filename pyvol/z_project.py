@@ -16,7 +16,7 @@ from OpenGL.GL.ARB.texture_rg import *
 from OpenGL.GL.framebufferobjects import *
 from OpenGL.GL.shaders import *
 
-from meshutils.mesh.mesh import Mesh
+from meshutils.mesh.mesh import Mesh   #, calculate_vertex_normals
 
 from vertex_normals import calculate_vertex_normals
 
@@ -40,7 +40,7 @@ import matplotlib.pyplot as plt
 
 from max_project import max_project
 
-from mesh_reproject import mesh_reproject
+from mesh_reproject import mesh_reproject, mesh_project
 
 class Obj():
     pass
@@ -322,7 +322,7 @@ class ProjectionMesh(Mesh):
         self.verts = np.asarray(verts, dtype=float)
         if tris is not None:
             self.tris = np.asarray(tris, dtype=np.uint32)
-#            self.make_connectivity_matrix()
+            self.make_connectivity_matrix()
 
         # Calculate mesh normals
         self.bbox=(np.min(self.verts,0),  np.max(self.verts,0) )
@@ -386,6 +386,8 @@ class ProjectionMesh(Mesh):
         vert_signal = np.zeros((len(self.verts),), dtype=float)
         vert_norms = self.vert_props['normal']
 
+        self.vert_props['signal'] = vert_signal
+
         mesh_project(stack, mesh, spacing, d0, d1, samples)
         """
         tt = np.linspace(0, 1, samples)
@@ -424,7 +426,6 @@ class ProjectionMesh(Mesh):
         
         # Recalculate normals explicitly, reproject to get signal
 
-
         new_point_map = {}
 
         # Loop over all triangles; find edge lengths
@@ -460,8 +461,6 @@ class ProjectionMesh(Mesh):
                     new_point_map[pp] = s1
                     verts.append(m1)
                 split.append((1, s1))
-
-
 
             d2 = la.norm(x1-x0)
             if d2>lc:
@@ -625,8 +624,7 @@ class RenderWindow(object):
         glutInit([])
         glutInitContextVersion(3, 2)
         glutInitWindowSize(800, 600)
-        glutInitDisplayMode(GLUT_RGBA | GLUT_DEPTH | GLUT_DOUBLE)
-        
+        glutInitDisplayMode(GLUT_RGBA | GLUT_DEPTH |GLUT_DOUBLE)
         self.window = glutCreateWindow("Cell surface")
         self.renderer = Renderer()
 
@@ -644,7 +642,7 @@ class Renderer(object):
         self.bfTex = None
         self.fbo = None
         self.render_volume = False
-
+        self.project_gain = 1.0
         self.threshold=50
 
         self.marker = None
@@ -652,7 +650,7 @@ class Renderer(object):
 
     def initGL(self):
         self.ball = Arcball()
-        self.zoom = 0.5
+        self.zoom = 0.25
         self.dist = 2.0
 
         self.make_volume_shaders()
@@ -696,11 +694,8 @@ class Renderer(object):
             const float falloff = 0.995;
 
             uniform mat4 mv_matrix;
-            uniform mat4 tex_inv_matrix;
 
             const float eps = 0.001;
-
-//            out float gl_FragDepth;
 
             vec3 normal_calc(vec3 p, float u) {
                 float dx = texture3D(texture_3d, p + vec3(eps,0,0)).x - u;
@@ -712,20 +707,19 @@ class Renderer(object):
 
 	    void main() {
                 vec2 texc = (v_pos.xy/v_pos.w +1.0)/2.0; //((/gl_FragCoord.w) + 1) / 2;
-                vec3 startPos = v_texcoord;
-                vec3 endPos = texture2D(backfaceTex, texc).rgb;
+                vec3 endPos = v_texcoord;
+                vec3 startPos = texture2D(backfaceTex, texc).rgb;
                 vec3 ray = endPos - startPos;
                 float rayLength = length(ray);
                 vec3 step = normalize(ray)*(2.0/1200.0);
                 vec4 col;
                 float sample;
                 vec3 samplePos = vec3(0,0,0); 
-                vec4 sp;
-                gl_FragDepth = 1.0; //gl_FragCoord.z;
                 while(true)
                 {
                     if ((length(samplePos) >= rayLength)) {
-                         discard;
+                        col = vec4(1.0,0.0,0.0,1.0);
+                        discard;
                     }
                     sample = texture3D(texture_3d, startPos + samplePos).x;
                     if(sample>isolevel) {
@@ -733,10 +727,7 @@ class Renderer(object):
                          n = normalize((mv_matrix * vec4(n, 0.0)).xyz);
                          col = vec4(0.5*(1.0+n.x)*vec3((startPos+samplePos).x, (startPos+samplePos).y, 1.0), 1.0);
                          gl_FragColor = col;
-                         sp = tex_inv_matrix*vec4(startPos + samplePos, 1.0);
-                         gl_FragDepth = 0.5*(1.0+sp.z/sp.w);
                          break;
-                         
                     }
                     samplePos += step;
                 }
@@ -784,12 +775,6 @@ class Renderer(object):
         vis.f_mv_location = glGetUniformLocation(
             vis.f_shader, 'mv_matrix'
             )
-
-        vis.f_tex_inv_location = glGetUniformLocation(
-            vis.f_shader, 'tex_inv_matrix'
-            )
-
-
         vis.f_p_location = glGetUniformLocation(
             vis.f_shader, 'p_matrix'
             )
@@ -1345,7 +1330,7 @@ class Renderer(object):
         
         o.transform = np.array(((sc, 0.0, 0.0, -sc*c[0]), (0.0, sc, 0.0, -sc*c[1]), (0.0, 0.0, sc, -sc*c[2]), (0.0, 0.0, 0.0, 1.0)))
 #        o.tex_transform = np.array(((1.0/tl[0], 0.0, 0.0, 0.0), (0.0, 1.0/tl[1], 0.0, 0.0), (0.0, 0.0, 1.0/tl[2], 0.0), (0.0, 0.0, 0.0, 1.0)))
-        o.tex_transform = np.array(( (0.0, 0.0, 1.0/tl[2], 0.0),(0.0, 1.0/tl[0], 0.0, 0.0), (1.0/tl[1], 0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0)))
+        o.tex_transform = np.array(( (0.0, 0.0, 1.0/tl[2], 0.0),(0.0, 1.0/tl[1], 0.0, 0.0), (1.0/tl[0], 0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0)))
 
         return o
 
@@ -1680,21 +1665,17 @@ class Renderer(object):
     def render_volume_iso_obj(self, obj):
 
         vs = self.volume_iso_shaders
-
-
         glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
         glViewport(0, 0, self.width, self.height)
         glActiveTexture(GL_TEXTURE0)
         glBindTexture(GL_TEXTURE_3D, obj.so.stack_texture)
 
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        glClear(GL_COLOR_BUFFER_BIT)
 
         glEnable(GL_CULL_FACE)
 
-        glDepthMask(GL_FALSE)
-        glDisable(GL_DEPTH_TEST)
-                
-        glCullFace(GL_BACK) #NB flipped
+        
+        glCullFace(GL_FRONT) #NB flipped
 
         glUseProgram(vs.b_shader)
 
@@ -1705,9 +1686,6 @@ class Renderer(object):
         mv_matrix = np.dot(self.VMatrix, obj.transform)
         glUniformMatrix4fv(vs.b_mv_location, 1, True, mv_matrix.astype('float32'))
         glUniformMatrix4fv(vs.b_p_location, 1, True, self.PMatrix.astype('float32'))
-
-
-
 
         glDrawElements(
                 GL_TRIANGLES, obj.elCount,
@@ -1732,25 +1710,17 @@ class Renderer(object):
         glUniform1i(vs.f_t3d_location, 0)
         glUniform1i(vs.f_bfTex_location, 1)
 
-        glDepthFunc(GL_ALWAYS)
-        glEnable(GL_DEPTH_TEST)
-        glDepthMask(GL_TRUE)
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
 
-#
         glEnable(GL_CULL_FACE)
-        glCullFace(GL_FRONT) 
+        glCullFace(GL_BACK) 
 
         glBindVertexArray(obj.vao)
         obj.elVBO.bind()
 
         glUniformMatrix4fv(vs.f_mv_location, 1, True, mv_matrix.astype('float32'))
         glUniformMatrix4fv(vs.f_p_location, 1, True, self.PMatrix.astype('float32'))
-
-        tex_inv_matrix = np.dot(self.PMatrix, np.dot(mv_matrix, la.inv(obj.tex_transform)))
-        glUniformMatrix4fv(vs.f_tex_inv_location, 1, True, tex_inv_matrix.astype('float32'))
-
 
         glUniform1f(vs.f_level_location, self.threshold/255.0)
 #        glUniform3f(vs.f_color_location, 1.0, 0.0, 1.0)
@@ -1760,37 +1730,8 @@ class Renderer(object):
                 GL_UNSIGNED_INT, obj.elVBO
             )
 
-        glUseProgram(vs.b_shader)
-
-        mv_matrix = np.dot(self.VMatrix, obj.transform)
-        glUniformMatrix4fv(vs.b_mv_location, 1, True, mv_matrix.astype('float32'))
-        glUniformMatrix4fv(vs.b_p_location, 1, True, self.PMatrix.astype('float32'))
-
-
-#        glDisable(GL_CULL_FACE)
-
-        glDepthFunc(GL_LESS)       
-        glEnable(GL_DEPTH_TEST)        
-
-#        glCullFace(GL_BACK) 
-        glDisable(GL_CULL_FACE)
-       
-
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
-        #
-        glDrawElements(
-                GL_TRIANGLES, obj.elCount,
-                GL_UNSIGNED_INT, obj.elVBO
-            )
-
-        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
-
-        glEnable(GL_CULL_FACE)
-
         glActiveTexture(GL_TEXTURE0+1)
         glBindTexture(GL_TEXTURE_2D, 0)
-
-        glEnable(GL_CULL_FACE)
 
         glCullFace(GL_BACK) 
         obj.elVBO.unbind()
@@ -1821,9 +1762,9 @@ class Renderer(object):
 
         glUniform1f(ps.depth_start_location, 0.0)
         glUniform1f(ps.depth_end_location, 1.0)
-        glUniform1f(ps.sample_gain_location, 10.0)
-        glUniform1f(ps.alpha_project_location, 0.5)
-        glUniform1i(ps.move_surface_location, 1)
+        glUniform1f(ps.sample_gain_location, self.project_gain)
+        glUniform1f(ps.alpha_project_location, 0.2)
+        glUniform1i(ps.move_surface_location, 0)
 
 
         glEnable(GL_DEPTH_TEST)
@@ -1920,6 +1861,16 @@ class Renderer(object):
             m = o.mesh
             m.smooth_surface()
             self.update_project_obj(o)
+        elif k=='n':
+            o = self.project_objs[0]
+            m = o.mesh
+            n = o.mesh.vert_props['normal']
+            o.mesh.verts -= 0.2*np.asarray(n)
+            self.update_project_obj(o)
+        elif k=='g':
+            self.project_gain *= 1.5
+        elif k=='G':
+            self.project_gain /= 1.5
         elif k=='r':
             o = self.project_objs[0]
             m = o.mesh
@@ -2007,7 +1958,7 @@ def run_tiff(ma, spacing):
 
     m = np.mean(bl1, axis=0)
     b = 1.0
-    c = 4.7
+    c = 5.0
     t = np.maximum(b*m,c)
     r = 0.5
 
@@ -2040,14 +1991,14 @@ if __name__=='__main__':
     if len(sys.argv)>=5:
         spacing = map(float, sys.argv[2:5])
     else:
-        spacing = (1.0, 1.0, 0.25)
+        spacing = (1.0, 1.0, 0.5)
     r.initGL()
 
 
 
     so = r.make_stack_obj(ma, spacing)
-#    mesh = run_tiff(ma, spacing)
-    r.solid_objs.append(r.make_solid_obj(make_iso_surface(50, ma, spacing)))
+    mesh = run_tiff(ma, spacing)
+#    r.solid_objs.append(r.make_solid_obj(make_iso_surface(50, ma, spacing)))
     
     vo = r.make_volume_obj(so)
     r.volume_objs.append(vo)
@@ -2056,7 +2007,7 @@ if __name__=='__main__':
     
     r.clip_volume_obj(vo)
 
-#    r.project_objs.append(r.make_project_obj(mesh, so))
+    r.project_objs.append(r.make_project_obj(mesh, so))
 #    stop_javabridge()
     r.start()
 
