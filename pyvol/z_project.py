@@ -1920,6 +1920,39 @@ class Renderer(object):
             self.zoom *= 1.1
         elif k=='-':
             self.zoom *= 0.9
+
+        elif k=='i':
+            o = self.project_objs[0]
+            m = o.mesh
+            so = o.so
+            vo = self.volume_objs[0]
+
+            
+            mask = np.ascontiguousarray(o.so.data[::2,::2,::2])
+            # Apply clip planes
+            x, y, z = np.ogrid[0:mask.shape[0], 0:mask.shape[1], 0:mask.shape[2]]
+            transform = np.dot(np.dot(np.diag([mask.shape[0]-1, mask.shape[1]-1, mask.shape[2]-1, 1]), vo.tex_transform), la.inv(vo.transform))
+            norm_transform = (la.inv(transform)[:3,:3]).T
+            for p, n in self.clip_planes:
+                # Transform back
+                print p, n
+                p2 = np.hstack((p,[1]))
+                p2 = np.dot(la.inv(vo.transform), p2)
+                print 'vo coords', p2
+                p2= np.dot(vo.tex_transform, p2)
+                print 'vo tex coords', p2
+                p2 = np.dot(np.diag([mask.shape[0]-1, mask.shape[1]-1, mask.shape[2]-1, 1]), p2)
+                print 'vo stack coords', p2
+
+                p = np.dot(transform, np.hstack((p,[1])))
+                n = np.dot(norm_transform, n)
+                print p, n
+                mask[((2*x-p[0])*n[0]+(2*y-p[1])*n[1]+(2*z-p[2])*n[2])<0] = 0
+            verts, tris = make_iso(np.ascontiguousarray(mask), self.threshold)
+            verts = verts * 2 * np.array(o.so.spacing, dtype=np.float32)[np.newaxis,:]
+            m.set_geom(verts, tris)
+            self.update_project_obj(o)
+
         elif k=='p':
             o = self.project_objs[0]
             m = o.mesh
@@ -1976,6 +2009,12 @@ class Renderer(object):
         elif k=='m':
             self.mouse_add_marker = True
             self.marker = None
+        elif k=='M':
+            self.mouse_add_marker = False
+            self.marker = None
+            if self.clip_planes:
+                del self.clip_planes[-1]
+                self.clip_volume_obj(self.volume_objs[0])
         elif k=='w':
             o = self.project_objs[0]
             m = o.mesh
