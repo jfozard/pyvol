@@ -1468,7 +1468,7 @@ class Renderer(object):
         mouse_y = -1.0+2*(h - y)/float(h)
         print 'mouse', (mouse_x, mouse_y)
         transform2 = la.inv(self.PMatrix.dot(self.VMatrix))
-        zNear = -1.0
+        zNear = 0.0
         zFar = 1.0
         p0 = transform2.dot(np.array((mouse_x, mouse_y, zNear, 1.0)))
         p1 = transform2.dot(np.array((mouse_x, mouse_y, zFar, 1.0)))
@@ -1487,6 +1487,50 @@ class Renderer(object):
         else:
             self.marker = start
 
+
+    def add_point_marker(self, x, y, vol_obj):
+        w = self.width
+        h = self.height
+        mouse_x = -1.0+2*x/float(w)
+        mouse_y = -1.0+2*(h - y)/float(h)
+        print 'mouse', (mouse_x, mouse_y)
+        transform2 = la.inv(self.PMatrix.dot(self.VMatrix))
+        zNear = 0.0
+        zFar = 1.0
+        p0 = transform2.dot(np.array((mouse_x, mouse_y, zNear, 1.0)))
+        p1 = transform2.dot(np.array((mouse_x, mouse_y, zFar, 1.0)))
+        p0 /= p0[3]
+        p1 /= p1[3]
+        p0[3] = 1.0 # Can we defer this normalization until later?
+        p1[3] = 1.0 
+        start = np.array(p0[:3], dtype=np.float32)
+        end  = np.array(p1[:3], dtype = np.float32)
+        print start, end
+        
+        
+        start_obj = la.solve(vol_obj.transform, start) # start of the ray in object coordinates
+        end_obj = la.solve(vol_obj.transform, end)
+        
+
+        assert((start_obj[3] - 1.0)<1e-6 and (end_obj[3] - 1.0)<1e-6)
+        # Now intersect this ray with the bounding box of the volume object?
+        
+        start_obj = intersect_ray_tris(start_obj, end_obj, obj.verts, obj.tris)
+        end_obj = intersect_ray_tris(end_obj, start_obj, obj.verts, obj.tris)
+
+        # Should check that theses are different ...
+
+        start_tex = np.dot(obj.tex_transform, start_obj)
+        end_tex = np.dot(obj.tex_transform, end_obj)
+        # These should lie inside the texture box
+        
+        pos_tex = intersect_ray_texture(start_tex, end_tex, data)
+        pos_obj = la.solve(obj.tex_transform, pos_tex)
+
+
+        self.solid_objs.append(self.make_sphere(pos, radius, (1.,0.,0.))) 
+ 
+        
         
     def on_mouse_wheel(self, b, d, x, y):
         self.dist += self.dist/15.0 * d;
