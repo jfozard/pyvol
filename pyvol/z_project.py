@@ -389,6 +389,10 @@ class ProjectionMesh(Mesh):
         self.vert_props['signal'] = vert_signal
 
         mesh_project(stack, mesh, spacing, d0, d1, samples)
+        
+        E = np.sum(vert_signal - self.connectivity.dot(vert_signal)/self.degree)
+        print np.min(vert_signal), np.max(vert_signal), np.mean(vert_signal), np.std(vert_signal), E
+
         """
         tt = np.linspace(0, 1, samples)
         for i in range(self.verts.shape[0]):
@@ -694,6 +698,7 @@ class Renderer(object):
             const float falloff = 0.995;
 
             uniform mat4 mv_matrix;
+            uniform mat4 tex_inv_matrix;
 
             const float eps = 0.001;
 
@@ -707,19 +712,20 @@ class Renderer(object):
 
 	    void main() {
                 vec2 texc = (v_pos.xy/v_pos.w +1.0)/2.0; //((/gl_FragCoord.w) + 1) / 2;
-                vec3 endPos = v_texcoord;
-                vec3 startPos = texture2D(backfaceTex, texc).rgb;
+                vec3 startPos = v_texcoord;
+                vec3 endPos = texture2D(backfaceTex, texc).rgb;
                 vec3 ray = endPos - startPos;
                 float rayLength = length(ray);
                 vec3 step = normalize(ray)*(2.0/1200.0);
                 vec4 col;
                 float sample;
                 vec3 samplePos = vec3(0,0,0); 
+                vec4 sp;
+                gl_FragDepth = 1.0; //gl_FragCoord.z;
                 while(true)
                 {
                     if ((length(samplePos) >= rayLength)) {
-                        col = vec4(1.0,0.0,0.0,1.0);
-                        discard;
+                         discard;
                     }
                     sample = texture3D(texture_3d, startPos + samplePos).x;
                     if(sample>isolevel) {
@@ -727,6 +733,8 @@ class Renderer(object):
                          n = normalize((mv_matrix * vec4(n, 0.0)).xyz);
                          col = vec4(0.5*(1.0+n.x)*vec3((startPos+samplePos).x, (startPos+samplePos).y, 1.0), 1.0);
                          gl_FragColor = col;
+                         sp = tex_inv_matrix*vec4(startPos + samplePos, 1.0);
+                         gl_FragDepth = 0.5*(1.0+sp.z/sp.w);
                          break;
                     }
                     samplePos += step;
@@ -775,6 +783,12 @@ class Renderer(object):
         vis.f_mv_location = glGetUniformLocation(
             vis.f_shader, 'mv_matrix'
             )
+
+        vis.f_tex_inv_location = glGetUniformLocation(
+            vis.f_shader, 'tex_inv_matrix'
+            )
+
+
         vis.f_p_location = glGetUniformLocation(
             vis.f_shader, 'p_matrix'
             )
@@ -1509,12 +1523,12 @@ class Renderer(object):
 
         self.VMatrix = translate(0, 0, -self.dist).dot(self.ball.matrix()).dot(scale(self.zoom))
         
-        if not self.render_volume:
-            for obj in self.solid_objs:
-                self.render_solid_obj(obj)
-            for obj in self.project_objs:
-                self.render_project_obj(obj)
-        else:
+        
+        for obj in self.solid_objs:
+            self.render_solid_obj(obj)
+        for obj in self.project_objs:
+            self.render_project_obj(obj)
+        if self.render_volume:
             for obj in self.volume_objs:
                 self.render_volume_iso_obj(obj)
         print 'draw'
@@ -1670,12 +1684,14 @@ class Renderer(object):
         glActiveTexture(GL_TEXTURE0)
         glBindTexture(GL_TEXTURE_3D, obj.so.stack_texture)
 
-        glClear(GL_COLOR_BUFFER_BIT)
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
         glEnable(GL_CULL_FACE)
 
-        
-        glCullFace(GL_FRONT) #NB flipped
+        glDepthMask(GL_FALSE)
+        glDisable(GL_DEPTH_TEST)
+                
+        glCullFace(GL_BACK) #NB flipped
 
         glUseProgram(vs.b_shader)
 
@@ -1710,17 +1726,24 @@ class Renderer(object):
         glUniform1i(vs.f_t3d_location, 0)
         glUniform1i(vs.f_bfTex_location, 1)
 
+        glDepthFunc(GL_LESS)
+        glEnable(GL_DEPTH_TEST)
+        glDepthMask(GL_TRUE)
 
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
+#        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
 
         glEnable(GL_CULL_FACE)
-        glCullFace(GL_BACK) 
+        glCullFace(GL_FRONT) 
 
         glBindVertexArray(obj.vao)
         obj.elVBO.bind()
 
         glUniformMatrix4fv(vs.f_mv_location, 1, True, mv_matrix.astype('float32'))
         glUniformMatrix4fv(vs.f_p_location, 1, True, self.PMatrix.astype('float32'))
+
+        tex_inv_matrix = np.dot(self.PMatrix, np.dot(mv_matrix, la.inv(obj.tex_transform)))
+        glUniformMatrix4fv(vs.f_tex_inv_location, 1, True, tex_inv_matrix.astype('float32'))
+
 
         glUniform1f(vs.f_level_location, self.threshold/255.0)
 #        glUniform3f(vs.f_color_location, 1.0, 0.0, 1.0)
@@ -1732,6 +1755,8 @@ class Renderer(object):
 
         glActiveTexture(GL_TEXTURE0+1)
         glBindTexture(GL_TEXTURE_2D, 0)
+
+        glEnable(GL_CULL_FACE)
 
         glCullFace(GL_BACK) 
         obj.elVBO.unbind()
@@ -1867,6 +1892,13 @@ class Renderer(object):
             n = o.mesh.vert_props['normal']
             o.mesh.verts -= 0.2*np.asarray(n)
             self.update_project_obj(o)
+        elif k=='N':
+            o = self.project_objs[0]
+            m = o.mesh
+            n = o.mesh.vert_props['normal']
+            o.mesh.verts += 0.2*np.asarray(n)
+            self.update_project_obj(o)
+
         elif k=='g':
             self.project_gain *= 1.5
         elif k=='G':
@@ -1905,6 +1937,10 @@ class Renderer(object):
             m = o.mesh
             m.project(o.so.data, o.so.spacing)
             m.save_ply(sys.argv[2])
+        elif k=='x':
+            o = self.project_objs[0]
+            m = o.mesh
+            m.project(o.so.data, o.so.spacing)
         elif k==' ':
             self.render_volume = not self.render_volume
         elif k=='q':
@@ -1991,7 +2027,7 @@ if __name__=='__main__':
     if len(sys.argv)>=5:
         spacing = map(float, sys.argv[2:5])
     else:
-        spacing = (1.0, 1.0, 0.5)
+        spacing = (1.0, 1.0, 0.6)
     r.initGL()
 
 
