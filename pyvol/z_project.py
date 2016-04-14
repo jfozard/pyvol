@@ -656,7 +656,7 @@ class Renderer(object):
         self.bfTex = None
         self.fbo = None
         self.render_volume = True
-        self.render_surface = False
+        self.render_surface = 0
         self.project_gain = 1.0
         self.threshold=50
 
@@ -1279,6 +1279,11 @@ class Renderer(object):
         obj.elCount = len(idx_out.flatten())
 
 
+    def get_obj_verts_tris(self, obj):
+        verts = np.array(obj.vtVBO.data).reshape(-1,6)[:,:3]
+        idx = np.array(obj.elVBO.data).reshape(-1,3)
+        return verts, idx
+
     def make_project_obj(self, mesh, so):
 
         o = Obj()
@@ -1851,7 +1856,8 @@ class Renderer(object):
         glEnable(GL_DEPTH_TEST)
         glEnable(GL_CULL_FACE)
 
-#        glPolygonMode( GL_FRONT_AND_BACK, GL_LINE )
+        if self.render_surface==2:
+            glPolygonMode( GL_FRONT_AND_BACK, GL_LINE )
 
         
         glBindVertexArray( obj.mesh_vao )
@@ -1872,6 +1878,9 @@ class Renderer(object):
                 GL_UNSIGNED_INT, obj.mesh_elVBO
             )
 #        print 'done_draw'
+
+        if self.render_surface==2:
+            glPolygonMode( GL_FRONT_AND_BACK, GL_FILL )
 
 
         obj.mesh_elVBO.unbind()
@@ -1989,6 +1998,25 @@ class Renderer(object):
                 m = ProjectionMesh.from_data(verts, tris)
                 self.project_objs.append(self.make_project_obj(m, so))
 
+        elif k=='b':
+            if self.project_objs:
+                o = self.project_objs[0]
+            else:
+                o = None
+            vo = self.volume_objs[0]
+            so = vo.so
+            verts, tris = self.get_obj_verts_tris(vo)
+            verts = np.ascontiguousarray(verts[:,[2, 1, 0]])
+            tris = np.ascontiguousarray(tris[:,::-1])
+            print verts
+            if o:
+                m = o.mesh
+                m.set_geom(verts, tris)
+                self.update_project_obj(o)
+            else:
+                m = ProjectionMesh.from_data(verts, tris)
+                self.project_objs.append(self.make_project_obj(m, so))
+
         elif k=='p':
             o = self.project_objs[0]
             m = o.mesh
@@ -2063,7 +2091,7 @@ class Renderer(object):
         elif k==' ':
             self.render_volume = not self.render_volume
         elif k=='?':
-            self.render_surface = not self.render_surface
+            self.render_surface = (self.render_surface+1)%3
         elif k=='q':
             quit()
 
