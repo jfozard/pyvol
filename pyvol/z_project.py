@@ -400,8 +400,8 @@ class ProjectionMesh(Mesh):
 
         mesh_project(stack, mesh, spacing, d0, d1, samples)
         
-        E = np.sum(vert_signal - self.connectivity.dot(vert_signal)/self.degree)
-        print np.min(vert_signal), np.max(vert_signal), np.mean(vert_signal), np.std(vert_signal), E
+#        E = np.sum(vert_signal - self.connectivity.dot(vert_signal)/self.degree)
+#        print np.min(vert_signal), np.max(vert_signal), np.mean(vert_signal), np.std(vert_signal), E
 
         """
         tt = np.linspace(0, 1, samples)
@@ -655,7 +655,8 @@ class Renderer(object):
         self.moving = False
         self.bfTex = None
         self.fbo = None
-        self.render_volume = False
+        self.render_volume = True
+        self.render_surface = False
         self.project_gain = 1.0
         self.threshold=50
 
@@ -1580,8 +1581,9 @@ class Renderer(object):
         
         for obj in self.solid_objs:
             self.render_solid_obj(obj)
-        for obj in self.project_objs:
-            self.render_project_obj(obj)
+        if self.render_surface:
+            for obj in self.project_objs:
+                self.render_project_obj(obj)
         if self.render_volume:
             for obj in self.volume_objs:
                 self.render_volume_iso_obj(obj)
@@ -1932,13 +1934,17 @@ class Renderer(object):
             self.zoom *= 0.9
 
         elif k=='i':
-            o = self.project_objs[0]
-            m = o.mesh
-            so = o.so
+            if self.project_objs:
+                o = self.project_objs[0]
+                m = o.mesh
+            else:
+                m = None
+                o = None
             vo = self.volume_objs[0]
-
+            so = vo.so
+                        
             
-            mask = np.ascontiguousarray(o.so.data[::2,::2,::2])
+            mask = np.ascontiguousarray(so.data[::2,::2,::2])
             # Apply clip planes
             x, y, z = np.ogrid[0:mask.shape[0], 0:mask.shape[1], 0:mask.shape[2]]
             transform = np.dot(np.dot(np.diag([mask.shape[2]-1, mask.shape[1]-1, mask.shape[0]-1, 1]), vo.tex_transform), la.inv(vo.transform))
@@ -1976,8 +1982,12 @@ class Renderer(object):
 
             verts, tris = make_iso(np.ascontiguousarray(mask), 1)
             verts = verts * 2 * np.array(o.so.spacing, dtype=np.float32)[np.newaxis,:]
-            m.set_geom(verts, tris)
-            self.update_project_obj(o)
+            if o:
+                m.set_geom(verts, tris)
+                self.update_project_obj(o)
+            else:
+                m = ProjectionMesh.from_data(verts, tris)
+                self.project_objs.append(self.make_project_obj(m, so))
 
         elif k=='p':
             o = self.project_objs[0]
@@ -2052,6 +2062,8 @@ class Renderer(object):
             m.project(o.so.data, o.so.spacing)
         elif k==' ':
             self.render_volume = not self.render_volume
+        elif k=='?':
+            self.render_surface = not self.render_surface
         elif k=='q':
             quit()
 
