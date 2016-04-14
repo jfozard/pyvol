@@ -45,6 +45,16 @@ from mesh_reproject import mesh_reproject, mesh_project
 class Obj():
     pass
 
+def process_mask(mask):
+    mask = nd.binary_dilation(mask, iterations=2)
+    mask = nd.binary_fill_holes(mask)
+    mask = nd.binary_erosion(mask, iterations=2)
+    label, num_label = nd.label(mask)
+    size = np.bincount(label.ravel())
+    print size
+    return (label == (np.argmax(size[1:]) + 1)).astype(np.uint8)
+
+
 def triangulate_polygon(pts, p, n):
     tris = []
     for i in range(1, len(pts)-1):
@@ -1931,24 +1941,40 @@ class Renderer(object):
             mask = np.ascontiguousarray(o.so.data[::2,::2,::2])
             # Apply clip planes
             x, y, z = np.ogrid[0:mask.shape[0], 0:mask.shape[1], 0:mask.shape[2]]
-            transform = np.dot(np.dot(np.diag([mask.shape[0]-1, mask.shape[1]-1, mask.shape[2]-1, 1]), vo.tex_transform), la.inv(vo.transform))
+            transform = np.dot(np.dot(np.diag([mask.shape[2]-1, mask.shape[1]-1, mask.shape[0]-1, 1]), vo.tex_transform), la.inv(vo.transform))
             norm_transform = (la.inv(transform)[:3,:3]).T
+
+            vo_verts = vo.orig_vb[:,:3]
+                    
+#            for p2 in vo_verts:
+#                t2 = np.dot(vo.tex_transform, np.hstack((p2, [1])))
+#                i2 = np.dot(np.diag([mask.shape[2]-1, mask.shape[1]-1, mask.shape[0]-1, 1]), t2)
+#                print mask.shape
+#                print 'vo: ', p2, t2, i2
+
+
             for p, n in self.clip_planes:
+
+#             for p, n in (
                 # Transform back
                 print p, n
                 p2 = np.hstack((p,[1]))
-                p2 = np.dot(la.inv(vo.transform), p2)
+                #p2 = np.dot(la.inv(vo.transform), p2)
                 print 'vo coords', p2
                 p2= np.dot(vo.tex_transform, p2)
                 print 'vo tex coords', p2
-                p2 = np.dot(np.diag([mask.shape[0]-1, mask.shape[1]-1, mask.shape[2]-1, 1]), p2)
+                p2 = np.dot(np.diag([mask.shape[2]-1, mask.shape[1]-1, mask.shape[0]-1, 1]), p2)
                 print 'vo stack coords', p2
 
                 p = np.dot(transform, np.hstack((p,[1])))
                 n = np.dot(norm_transform, n)
                 print p, n
-                mask[((2*x-p[0])*n[0]+(2*y-p[1])*n[1]+(2*z-p[2])*n[2])<0] = 0
-            verts, tris = make_iso(np.ascontiguousarray(mask), self.threshold)
+                mask[((x-p[2])*n[2]+(y-p[1])*n[1]+(z-p[0])*n[0])>0] = 0
+
+            mask = process_mask(mask > self.threshold)
+            
+
+            verts, tris = make_iso(np.ascontiguousarray(mask), 1)
             verts = verts * 2 * np.array(o.so.spacing, dtype=np.float32)[np.newaxis,:]
             m.set_geom(verts, tris)
             self.update_project_obj(o)
@@ -2107,8 +2133,8 @@ if __name__=='__main__':
 
     rw = RenderWindow()
     r = rw.renderer
-    if len(sys.argv)>=5:
-        spacing = map(float, sys.argv[2:5])
+    if len(sys.argv)>=6:
+        spacing = map(float, sys.argv[3:6])
     else:
         spacing = (1.0, 1.0, 0.6)
     r.initGL()
