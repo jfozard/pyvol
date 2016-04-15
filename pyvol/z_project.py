@@ -347,13 +347,15 @@ class ProjectionMesh(Mesh):
         col_out = np.ones(v_out.shape, dtype=np.float32)
         return v_out, n_out, col_out, idx_out
 
-    def reproject(self, stack, spacing):
+    def reproject(self, stack, spacing, level):
         print 'shape', stack.shape, stack.strides
         print 'Stack range', np.max(stack), np.min(stack)
         print 'bbox', np.min(self.verts, axis=0), np.max(self.verts, axis=0)
         print 'spacing', spacing, spacing.shape
 
-        mesh_reproject(stack, mesh, spacing, -50, 10, 101)
+        print mesh.verts
+        mesh_reproject(stack, mesh, spacing, float(level), -2.0, 0.0)
+        print mesh.verts
         
         """
         vert_signal = np.zeros((len(self.verts),), dtype=float)
@@ -1952,8 +1954,9 @@ class Renderer(object):
             vo = self.volume_objs[0]
             so = vo.so
                         
-            
-            mask = np.ascontiguousarray(so.data[::2,::2,::2])
+
+            sp = 8
+            mask = np.ascontiguousarray(so.data[::sp,::sp,::sp])
             # Apply clip planes
             x, y, z = np.ogrid[0:mask.shape[0], 0:mask.shape[1], 0:mask.shape[2]]
             transform = np.dot(np.dot(np.diag([mask.shape[2]-1, mask.shape[1]-1, mask.shape[0]-1, 1]), vo.tex_transform), la.inv(vo.transform))
@@ -1990,7 +1993,7 @@ class Renderer(object):
             
 
             verts, tris = make_iso(np.ascontiguousarray(mask), 1)
-            verts = verts * 2 * np.array(o.so.spacing, dtype=np.float32)[np.newaxis,:]
+            verts = verts * sp * np.array(o.so.spacing, dtype=np.float32)[np.newaxis,:]
             if o:
                 m.set_geom(verts, tris)
                 self.update_project_obj(o)
@@ -2020,7 +2023,7 @@ class Renderer(object):
         elif k=='p':
             o = self.project_objs[0]
             m = o.mesh
-            m.reproject(o.so.data, o.so.spacing)
+            m.reproject(o.so.data, o.so.spacing, self.threshold)
             self.update_project_obj(o)
         elif k=='s':
             o = self.project_objs[0]

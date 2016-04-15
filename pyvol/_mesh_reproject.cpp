@@ -2,6 +2,7 @@
 
 #include "eigen3/Eigen/Core"
 #include <omp.h>
+#include <iostream>
 
 double sample3D(unsigned char * A, int I, int J, int K, const Eigen::Vector3d& p)
 {
@@ -27,35 +28,26 @@ double sample3D(unsigned char * A, int I, int J, int K, const Eigen::Vector3d& p
     V110*x*y*(1-z) + V111*x*y*z;  
 }
 
-extern "C" void _mesh_reproject(unsigned char* A, int I, int J, int K, double* spacing, double* verts, double* norms, int NV, double d0, double d1, int ns)
+extern "C" void _mesh_reproject(unsigned char* A, int I, int J, int K, double* spacing, double* verts, double* norms,  int NV, unsigned int* tris, int NT, double level, double t, double s)
 {
   const Eigen::Vector3d bbox0(0, 0, 0);
   const Eigen::Vector3d bbox1(I-1, J-1, K-1);
   Eigen::Vector3d sp = Eigen::Map<Eigen::Vector3d>(spacing);
+  //  Eigen::VectorXd u(NV);
+  //  u.setZero();
+  
   #pragma omp for
   for(int i=0; i<NV; i++)
     {
       Eigen::Map<Eigen::Vector3d> v(&verts[3*i]);
       Eigen::Map<Eigen::Vector3d> n(&norms[3*i]);
-      Eigen::Vector3d p_start = (v + d0*n);
-      Eigen::Vector3d p_start2 = ((p_start.cwiseQuotient(sp)).cwiseMax(bbox0)).cwiseMin(bbox1);
-      Eigen::Vector3d p_end = (v + d1*n);
-      Eigen::Vector3d p_end2 = ((p_end.cwiseQuotient(sp)).cwiseMax(bbox0)).cwiseMin(bbox1);
-      double max_val = -100.0;
-      double max_x = 0.0;
-      for(int j=0; j<ns; j++)
-	{
-	  double x = j/100.0;
-	  double s = sample3D(A, I, J, K, p_start2*(1.0-x) + p_end2*x);
-	  if(s > max_val)
-	    {
-	      max_val = s;
-	      max_x = x;
-	    }
-	}
-      v = ((1.0-max_x)*p_start2 + max_x*p_end2).cwiseProduct(sp);
-    }
+      Eigen::Vector3d p2 = ((v.cwiseQuotient(sp)).cwiseMax(bbox0)).cwiseMin(bbox1);
+      double l = sample3D(A, I, J, K, p2);
 
+      //      std::cout << v.transpose() << " " << l << " " << level << " " << t << " " << n.transpose();
+      v += t*exp(-(l/level))*n;
+      //std::cout << " " << v.transpose() <<"\n";
+    }
 }
 
 
