@@ -139,6 +139,14 @@ class RenderWindow(object):
                             , dtype=np.uint32)
         o.vtVBO=VBO(vb)
 
+        sc = 1.0/la.norm(tl)
+        c = 0.5*tl
+
+        o.transform = np.array(( (0.0, 0.0, sc, -sc*c[2]), (0.0, sc, 0.0, -sc*c[1]),  (sc, 0.0, 0.0, -sc*c[0]), (0.0, 0.0, 0.0, 1.0)))
+
+        o.elVBO=VBO(idx_out, target=GL_ELEMENT_ARRAY_BUFFER)
+        o.elCount=len(idx_out.flatten())
+
         print('made VBO')
         o.vtVBO.bind()
 
@@ -158,14 +166,7 @@ class RenderWindow(object):
         glDisableVertexAttribArray( self.b_shader.get_attrib("position") )
         glDisableVertexAttribArray( self.b_shader.get_attrib("texcoord") )
 
-        o.elVBO=VBO(idx_out, target=GL_ELEMENT_ARRAY_BUFFER)
-        o.elCount=len(idx_out.flatten())
         glBindBuffer(GL_ARRAY_BUFFER, 0)
-
-        sc = 1.0/la.norm(tl)
-        c = 0.5*tl
-
-        o.transform = np.array(( (0.0, 0.0, sc, -sc*c[2]), (0.0, sc, 0.0, -sc*c[1]),  (sc, 0.0, 0.0, -sc*c[0]), (0.0, 0.0, 0.0, 1.0)))
 
         return o
 
