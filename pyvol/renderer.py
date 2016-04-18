@@ -5,13 +5,12 @@ import numpy as np
 import numpy.linalg as la
 import math
 
-from OpenGL.GL import *
+import OpenGL.GL
 from OpenGL.GLUT import *
 from OpenGL.GL.shaders import *
 from OpenGL.GL.framebufferobjects import *
 
 from OpenGL.arrays.vbo import *
-from OpenGL.arrays import GLvoidpArray, GLintArray
 from OpenGL.GL.ARB.vertex_array_object import *
 from OpenGL.GL.ARB.texture_rg import *
 from OpenGL.GL.framebufferobjects import *
@@ -26,7 +25,12 @@ SHADER_SOURCE_DIR = os.path.join(HERE, "shaders")
 
 def perspective(fovy, aspect, zNear, zFar):
     f = 1.0/math.tan(fovy/2.0/180*math.pi)
-    return np.array(((f/aspect, 0, 0, 0), (0,f,0,0), (0,0,(zFar+zNear)/(zNear-zFar), 2*zFar*zNear/(zNear-zFar)), (0, 0, -1, 0)))
+    c1 = (zFar+zNear)/(zNear-zFar)
+    c2 = 2*zFar*zNear/(zNear-zFar)
+    return np.array(((f/aspect, 0, 0, 0),
+                     (0, f, 0, 0),
+                     (0, 0, c1, c2),
+                     (0, 0, -1, 0)))
 
 
 def _compile_shader_from_source(fname, shader_type):
@@ -108,7 +112,7 @@ class VolumeObject(object):
 
         self.transform = np.array(( (0.0, 0.0, sc, -sc*c[2]), (0.0, sc, 0.0, -sc*c[1]),  (sc, 0.0, 0.0, -sc*c[0]), (0.0, 0.0, 0.0, 1.0)))
 
-        self.elVBO=VBO(idx_out, target=GL_ELEMENT_ARRAY_BUFFER)
+        self.elVBO=VBO(idx_out, target=OpenGL.GL.GL_ELEMENT_ARRAY_BUFFER)
         self.elCount=len(idx_out.flatten())
 
         print('made VBO')
@@ -126,22 +130,26 @@ class VolumeObject(object):
         w, h, d = s.shape
         print('shape', s.shape)
 
-        stack_texture = glGenTextures(1)
+        stack_texture = OpenGL.GL.glGenTextures(1)
         print(stack_texture)
 
-        glActiveTexture(GL_TEXTURE0)
-        glBindTexture(GL_TEXTURE_3D, stack_texture)
+        OpenGL.GL.glActiveTexture(OpenGL.GL.GL_TEXTURE0)
+        OpenGL.GL.glBindTexture(OpenGL.GL.GL_TEXTURE_3D, stack_texture)
 
-        glTexParameter(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-        glTexParameter(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        OpenGL.GL.glTexParameter(OpenGL.GL.GL_TEXTURE_3D,
+                                 OpenGL.GL.GL_TEXTURE_MAG_FILTER,
+                                 OpenGL.GL.GL_LINEAR)
+        OpenGL.GL.glTexParameter(OpenGL.GL.GL_TEXTURE_3D,
+                                 OpenGL.GL.GL_TEXTURE_MIN_FILTER,
+                                 OpenGL.GL.GL_LINEAR)
 
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
+        OpenGL.GL.glPixelStorei(OpenGL.GL.GL_UNPACK_ALIGNMENT, 1)
 
        # glTexParameter(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
        # glTexParameter(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
        # glTexParameter(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE)
 
-        glTexImage3D(GL_TEXTURE_3D, 0, GL_R8, d, h, w, 0, GL_RED, GL_UNSIGNED_BYTE, s)
+        OpenGL.GL.glTexImage3D(OpenGL.GL.GL_TEXTURE_3D, 0, GL_R8, d, h, w, 0, OpenGL.GL.GL_RED, GL_UNSIGNED_BYTE, s)
         print("made 3D texture")
         return stack_texture, s.shape
 
@@ -201,7 +209,7 @@ class RenderWindow(object):
         glDisableVertexAttribArray( self.b_shader.get_attrib("position") )
         glDisableVertexAttribArray( self.b_shader.get_attrib("texcoord") )
 
-        glBindBuffer(GL_ARRAY_BUFFER, 0)
+        OpenGL.GL.glBindBuffer(OpenGL.GL.GL_ARRAY_BUFFER, 0)
 
         self.volue_objects.append(self.volume_object)
 
@@ -239,15 +247,15 @@ class RenderWindow(object):
     def reshape(self, width, height):
         self.width = width
         self.height = height
-        glViewport(0, 0, width, height)
+        OpenGL.GL.glViewport(0, 0, width, height)
         self.PMatrix = perspective(40.0, float(width)/height, 0.1, 10000.0)
         self.ball.place([width/2,height/2],height/2)
         self.init_back_texture()
         glutPostRedisplay()
 
     def draw(self):
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-        glClearColor(0.0,0.0,0.0,1.0)
+        OpenGL.GL.glClear(OpenGL.GL.GL_COLOR_BUFFER_BIT | OpenGL.GL.GL_DEPTH_BUFFER_BIT)
+        OpenGL.GL.glClearColor(0.0,0.0,0.0,1.0)
 
         self.VMatrix = translation_matrix((0, 0, -self.dist)).dot(self.ball.matrix()).dot(scale_matrix(self.zoom))
         for volume_object in self.volue_objects:
@@ -261,18 +269,22 @@ class RenderWindow(object):
             self.fbo = glGenFramebuffers(1)
         print("fbo", self.fbo)
 
-        glActiveTexture(GL_TEXTURE0 + 1)
+        OpenGL.GL.glActiveTexture(OpenGL.GL.GL_TEXTURE0 + 1)
 
         if self.bfTex != None:
-            glDeleteTextures([self.bfTex])
+            OpenGL.GL.glDeleteTextures([self.bfTex])
 
-        self.bfTex = glGenTextures(1)
+        self.bfTex = OpenGL.GL.glGenTextures(1)
 
         print("gen Tex 1")
-        glBindTexture(GL_TEXTURE_2D, self.bfTex)
+        OpenGL.GL.glBindTexture(OpenGL.GL.GL_TEXTURE_2D, self.bfTex)
 
-        glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-        glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        OpenGL.GL.glTexParameter(OpenGL.GL.GL_TEXTURE_2D,
+                                 OpenGL.GL.GL_TEXTURE_MAG_FILTER,
+                                 OpenGL.GL.GL_LINEAR)
+        OpenGL.GL.glTexParameter(OpenGL.GL.GL_TEXTURE_2D,
+                                 OpenGL.GL.GL_TEXTURE_MIN_FILTER,
+                                 OpenGL.GL.GL_LINEAR)
 
         print("bound", self.bfTex)
 
@@ -280,30 +292,35 @@ class RenderWindow(object):
         w = int(self.width)
         h = int(self.height)
 
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0, GL_RGBA, GL_FLOAT, None)
+        OpenGL.GL.glTexImage2D(OpenGL.GL.GL_TEXTURE_2D, 0,
+                               OpenGL.GL.GL_RGBA16F, w, h, 0,
+                               OpenGL.GL.GL_RGBA, GL_FLOAT, None)
         print("made texture img")
 
         glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
 
-        glFramebufferTexture2D(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, self.bfTex, 0)
+        OpenGL.GL.glFramebufferTexture2D(GL_FRAMEBUFFER_EXT,
+                                         GL_COLOR_ATTACHMENT0_EXT,
+                                         OpenGL.GL.GL_TEXTURE_2D,
+                                         self.bfTex, 0)
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0)
 
-        glBindTexture(GL_TEXTURE_2D, 0)
+        OpenGL.GL.glBindTexture(OpenGL.GL.GL_TEXTURE_2D, 0)
 
     def render_volume_obj(self, volume_object):
 
         glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
-        glViewport(0, 0, self.width, self.height)
-        glActiveTexture(GL_TEXTURE0)
-        glBindTexture(GL_TEXTURE_3D, volume_object.stack_texture)
+        OpenGL.GL.glViewport(0, 0, self.width, self.height)
+        OpenGL.GL.glActiveTexture(OpenGL.GL.GL_TEXTURE0)
+        OpenGL.GL.glBindTexture(OpenGL.GL.GL_TEXTURE_3D, volume_object.stack_texture)
 
-        glClear(GL_COLOR_BUFFER_BIT)
+        OpenGL.GL.glClear(OpenGL.GL.GL_COLOR_BUFFER_BIT)
 
 
-        glEnable(GL_CULL_FACE)
+        OpenGL.GL.glEnable(OpenGL.GL.GL_CULL_FACE)
 
-        glCullFace(GL_BACK) #NB flipped
+        OpenGL.GL.glCullFace(OpenGL.GL.GL_BACK) #NB flipped
 
 #        glValidateProgram(self.b_shader.program)
 #        print("b_valid ", glGetProgramiv(self.b_shader.program, GL_VALIDATE_STATUS))
@@ -320,9 +337,9 @@ class RenderWindow(object):
         glUniformMatrix4fv(self.b_shader.get_uniform("mv_matrix"), 1, True, mv_matrix.astype('float32'))
         glUniformMatrix4fv(self.b_shader.get_uniform("p_matrix"), 1, True, self.PMatrix.astype('float32'))
 
-        glDrawElements(
-                GL_TRIANGLES, volume_object.elCount,
-                GL_UNSIGNED_INT, volume_object.elVBO
+        OpenGL.GL.glDrawElements(
+                OpenGL.GL.GL_TRIANGLES, volume_object.elCount,
+                OpenGL.GL.GL_UNSIGNED_INT, volume_object.elVBO
             )
 
         volume_object.elVBO.unbind()
@@ -331,11 +348,11 @@ class RenderWindow(object):
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0)
 
-        glActiveTexture(GL_TEXTURE0+1)
-        glBindTexture(GL_TEXTURE_2D, self.bfTex)
+        OpenGL.GL.glActiveTexture(OpenGL.GL.GL_TEXTURE0+1)
+        OpenGL.GL.glBindTexture(OpenGL.GL.GL_TEXTURE_2D, self.bfTex)
 
-        glActiveTexture(GL_TEXTURE0)
-        glBindTexture(GL_TEXTURE_3D, volume_object.stack_texture)
+        OpenGL.GL.glActiveTexture(OpenGL.GL.GL_TEXTURE0)
+        OpenGL.GL.glBindTexture(OpenGL.GL.GL_TEXTURE_3D, volume_object.stack_texture)
 
 
         glUseProgram(self.f_shader.program)
@@ -344,28 +361,28 @@ class RenderWindow(object):
         glUniform1i(self.f_shader.get_uniform("backfaceTex"), 1)
 
 
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
+        OpenGL.GL.glClear(OpenGL.GL.GL_COLOR_BUFFER_BIT | OpenGL.GL.GL_DEPTH_BUFFER_BIT )
 
-        glEnable(GL_CULL_FACE)
-        glCullFace(GL_FRONT)
+        OpenGL.GL.glEnable(OpenGL.GL.GL_CULL_FACE)
+        OpenGL.GL.glCullFace(OpenGL.GL.GL_FRONT)
 
-        glBindVertexArray(volume_object.vao)
+        OpenGL.GL.glBindVertexArray(volume_object.vao)
         volume_object.elVBO.bind()
 
         glUniformMatrix4fv(self.f_shader.get_uniform("mv_matrix"), 1, True, mv_matrix.astype('float32'))
         glUniformMatrix4fv(self.f_shader.get_uniform("p_matrix"), 1, True, self.PMatrix.astype('float32'))
 
-        glDrawElements(
-                GL_TRIANGLES, volume_object.elCount,
-                GL_UNSIGNED_INT, volume_object.elVBO
+        OpenGL.GL.glDrawElements(
+                OpenGL.GL.GL_TRIANGLES, volume_object.elCount,
+                OpenGL.GL.GL_UNSIGNED_INT, volume_object.elVBO
             )
 
-        glActiveTexture(GL_TEXTURE0+1)
-        glBindTexture(GL_TEXTURE_2D, 0)
+        OpenGL.GL.glActiveTexture(OpenGL.GL.GL_TEXTURE0+1)
+        OpenGL.GL.glBindTexture(OpenGL.GL.GL_TEXTURE_2D, 0)
 
-        glCullFace(GL_BACK)
+        OpenGL.GL.glCullFace(OpenGL.GL.GL_BACK)
         volume_object.elVBO.unbind()
-        glBindVertexArray( 0 )
+        OpenGL.GL.glBindVertexArray( 0 )
         glUseProgram(0)
 
     def key(self, k, x, y):
