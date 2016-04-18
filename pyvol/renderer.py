@@ -101,15 +101,12 @@ class RenderWindow(object):
         front_fragment = compile_fragment_shader_from_source("front.frag")
         back_fragment = compile_fragment_shader_from_source("back.frag")
 
-        vs = Obj()
         self.b_shader = ShaderProgram(vertex, back_fragment)
 
         self.volume_stride = 6 * 4
 
         self.f_shader = ShaderProgram(vertex, front_fragment)
-        vs.f_shader = self.f_shader.program
 
-        self.volume_shaders = vs
 
     def make_volume_obj(self, fn, spacing):
         o = Obj()
@@ -118,7 +115,6 @@ class RenderWindow(object):
 
         o.vao = glGenVertexArrays(1)
         glBindVertexArray(o.vao)
-        vs = self.volume_shaders
 
         tl = np.array((shape[2]*spacing[2],
                        shape[1]*spacing[1],
@@ -295,7 +291,6 @@ class RenderWindow(object):
 
     def render_volume_obj(self, obj):
 
-        vs = self.volume_shaders
         glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
         glViewport(0, 0, self.width, self.height)
         glActiveTexture(GL_TEXTURE0)
@@ -341,7 +336,7 @@ class RenderWindow(object):
         glBindTexture(GL_TEXTURE_3D, obj.stack_texture)
 
 
-        glUseProgram(vs.f_shader)
+        glUseProgram(self.f_shader.program)
 
         glUniform1i(self.f_shader.get_uniform("texture3s"), 0)
         glUniform1i(self.f_shader.get_uniform("backfaceTex"), 1)
