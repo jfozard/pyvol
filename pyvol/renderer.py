@@ -18,7 +18,6 @@ from OpenGL.GL.framebufferobjects import *
 from OpenGL.GL.shaders import *
 
 from transformations import Arcball
-from ply_parser import parse_ply2
 
 from PIL import Image
 
