@@ -102,10 +102,8 @@ class RenderWindow(object):
         back_fragment = compile_fragment_shader_from_source("back.frag")
 
         self.b_shader = ShaderProgram(vertex, back_fragment)
-
-        self.volume_stride = 6 * 4
-
         self.f_shader = ShaderProgram(vertex, front_fragment)
+        self.volume_stride = 6 * 4
 
 
     def make_volume_obj(self, fn, spacing):
