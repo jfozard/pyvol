@@ -106,7 +106,7 @@ class RenderWindow(object):
         with open(os.path.join(SHADER_SOURCE_DIR, "volumetric.vs")) as fh:
             vs_source = fh.read()
         vertex = compileShader(vs_source, GL_VERTEX_SHADER)
-        
+
         with open(os.path.join(SHADER_SOURCE_DIR, "front.frag")) as fh:
             front_frag_source = fh.read()
         front_fragment = compileShader(front_frag_source, GL_FRAGMENT_SHADER)
@@ -119,11 +119,11 @@ class RenderWindow(object):
         vs = Obj()
         vs.b_shader = link_shader_program(vertex, back_fragment)
 
-        vs.b_position_location = glGetAttribLocation( 
-            vs.b_shader, 'position' 
+        vs.b_position_location = glGetAttribLocation(
+            vs.b_shader, 'position'
             )
-        vs.b_texcoord_location = glGetAttribLocation( 
-            vs.b_shader, 'texcoord' 
+        vs.b_texcoord_location = glGetAttribLocation(
+            vs.b_shader, 'texcoord'
             )
 
         vs.b_mv_location = glGetUniformLocation(
@@ -137,11 +137,11 @@ class RenderWindow(object):
 
         vs.f_shader = link_shader_program(vertex, front_fragment)
 
-        vs.f_position_location = glGetAttribLocation( 
-            vs.f_shader, 'position' 
+        vs.f_position_location = glGetAttribLocation(
+            vs.f_shader, 'position'
             )
-        vs.f_texcoord_location = glGetAttribLocation( 
-            vs.f_shader, 'texcoord' 
+        vs.f_texcoord_location = glGetAttribLocation(
+            vs.f_shader, 'texcoord'
             )
 
         vs.f_mv_location = glGetUniformLocation(
@@ -161,7 +161,7 @@ class RenderWindow(object):
 
     def make_volume_obj(self, fn, spacing):
         o = Obj()
-        
+
         o.stack_texture, shape = self.load_stack(fn)
 
         o.vao = glGenVertexArrays(1)
@@ -180,31 +180,31 @@ class RenderWindow(object):
                [ tl[0], 0.0, tl[2], 1.0, 0.0, 1.0],
                [ 0.0, tl[1], tl[2], 0.0, 1.0, 1.0],
                [ tl[0], tl[1], tl[2], 1.0, 1.0, 1.0] ]
-        
+
         vb = np.array(vb, dtype=np.float32)
         vb = vb.flatten()
-        
+
         idx_out = np.array([[0, 2, 1], [2, 3, 1],
                             [1, 4, 0], [1, 5, 4],
                             [3, 5, 1], [3, 7, 5],
                             [2, 7, 3], [2, 6, 7],
                             [0, 6, 2], [0, 4, 6],
                             [5, 6, 4], [5, 7, 6]]
-                            , dtype=np.uint32)        
+                            , dtype=np.uint32)
         o.vtVBO=VBO(vb)
 
         print('made VBO')
         o.vtVBO.bind()
 
         glEnableVertexAttribArray( vs.b_position_location )
-        glVertexAttribPointer( 
-            vs.b_position_location, 
-            3, GL_FLOAT, False, vs.vStride, o.vtVBO 
+        glVertexAttribPointer(
+            vs.b_position_location,
+            3, GL_FLOAT, False, vs.vStride, o.vtVBO
             )
 
         glEnableVertexAttribArray( vs.b_texcoord_location )
-        glVertexAttribPointer( 
-            vs.b_texcoord_location, 
+        glVertexAttribPointer(
+            vs.b_texcoord_location,
             3, GL_FLOAT, False, vs.vStride, o.vtVBO+12
             )
 
@@ -239,7 +239,7 @@ class RenderWindow(object):
         glutPostRedisplay()
 
     def on_mouse_move(self, x, y, z=0):
-        if self.moving:            
+        if self.moving:
             self.ex, self.ey = x, y
             self.ball.drag([x,y])
             glutPostRedisplay()
@@ -305,7 +305,7 @@ class RenderWindow(object):
         glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
 
         glFramebufferTexture2D(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, self.bfTex, 0)
- 
+
         glBindFramebuffer(GL_FRAMEBUFFER, 0)
 
         glBindTexture(GL_TEXTURE_2D, 0)
@@ -327,7 +327,7 @@ class RenderWindow(object):
 
         glActiveTexture(GL_TEXTURE0)
         glBindTexture(GL_TEXTURE_3D, stack_texture)
-        
+
         glTexParameter(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
         glTexParameter(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
 
@@ -353,7 +353,7 @@ class RenderWindow(object):
 
 
         glEnable(GL_CULL_FACE)
-        
+
         glCullFace(GL_BACK) #NB flipped
 
 #        glValidateProgram(vs.b_shader)
@@ -398,7 +398,7 @@ class RenderWindow(object):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
 
         glEnable(GL_CULL_FACE)
-        glCullFace(GL_FRONT) 
+        glCullFace(GL_FRONT)
 
         glBindVertexArray(obj.vao)
         obj.elVBO.bind()
@@ -414,7 +414,7 @@ class RenderWindow(object):
         glActiveTexture(GL_TEXTURE0+1)
         glBindTexture(GL_TEXTURE_2D, 0)
 
-        glCullFace(GL_BACK) 
+        glCullFace(GL_BACK)
         obj.elVBO.unbind()
         glBindVertexArray( 0 )
         glUseProgram(0)
@@ -428,7 +428,7 @@ class RenderWindow(object):
         glutPostRedisplay()
 
 
-        
+
 
 def main():
     r = RenderWindow()
@@ -440,7 +440,7 @@ def main():
     r.objs.append(r.make_volume_obj(sys.argv[1], spacing))
     r.start()
 
-if __name__ == '__main__': 
+if __name__ == '__main__':
     main()
 
 

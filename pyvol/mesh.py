@@ -1,5 +1,10 @@
 """Module with mesh classes."""
 
+import numpy as np
+import numpy.linalg as la
+
+from ply_parser import parse_ply2
+
 class ProjectionMesh(object):
     def __init__(self):
         pass
@@ -23,7 +28,7 @@ class ProjectionMesh(object):
         for v in data['vertex'][0]:
             verts.append((v[x_idx], v[y_idx], v[z_idx]))
             vert_norms.append(np.array((v[nx_idx], v[ny_idx], v[nz_idx])))
-        prin(('done_vertex'))
+        print(('done_vertex'))
         v_array=np.array(verts,dtype='float32')
 
         self.bbox=(np.min(v_array,0),  np.max(v_array,0) )
@@ -44,13 +49,12 @@ class ProjectionMesh(object):
         return zoom
 
     def generate_arrays_projection(self):
-        prin(('start_arrays'))
+        print(('start_arrays'))
         npr.seed(1)
         tris = []
-        v_out=np.array(self.verts,dtype=np.float32) 
+        v_out=np.array(self.verts,dtype=np.float32)
         idx_out=np.array(self.tris,dtype=np.uint32)
         n_out=np.array(self.vert_norms,dtype=np.float32)
 #        col_out = np.tile(nsignal,(3,1)).T
         col_out = np.ones(v_out.shape, dtype=np.float32)
         return v_out, n_out, col_out, idx_out
-
