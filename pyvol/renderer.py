@@ -71,6 +71,85 @@ class ShaderProgram(object):
         return glGetUniformLocation(self.program, name)
 
 
+class VolumeObject(object):
+
+    def __init__(self, fn, spacing):
+        self.stack_texture, shape = self.load_stack(fn)
+
+        self.vao = glGenVertexArrays(1)
+        glBindVertexArray(self.vao)
+
+        tl = np.array((shape[2]*spacing[2],
+                       shape[1]*spacing[1],
+                       shape[0]*spacing[0]))
+
+        # Vertex buffer: corners of cube.
+        # x, y, z, texture_x, texture_y, texture_z
+        vb = [ [ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # Corner 0.
+               [ tl[0], 0.0, 0.0, 1.0, 0.0, 0.0],
+               [ 0.0, tl[1], 0.0, 0.0, 1.0, 0.0],
+               [ tl[0], tl[1], 0.0, 1.0, 1.0, 0.0],
+               [ 0.0, 0.0, tl[2], 0.0, 0.0, 1.0],
+               [ tl[0], 0.0, tl[2], 1.0, 0.0, 1.0],
+               [ 0.0, tl[1], tl[2], 0.0, 1.0, 1.0],
+               [ tl[0], tl[1], tl[2], 1.0, 1.0, 1.0] ]  # Corner 7.
+
+        vb = np.array(vb, dtype=np.float32)
+        vb = vb.flatten()
+
+        # Triangles of cube.
+        idx_out = np.array([[0, 2, 1], [2, 3, 1],  # Triangle 0, triangle 1.
+                            [1, 4, 0], [1, 5, 4],
+                            [3, 5, 1], [3, 7, 5],
+                            [2, 7, 3], [2, 6, 7],
+                            [0, 6, 2], [0, 4, 6],
+                            [5, 6, 4], [5, 7, 6]]  # Triangle 10, triangle 11.
+                            , dtype=np.uint32)
+        self.vtVBO=VBO(vb)
+
+        sc = 1.0/la.norm(tl)
+        c = 0.5*tl
+
+        self.transform = np.array(( (0.0, 0.0, sc, -sc*c[2]), (0.0, sc, 0.0, -sc*c[1]),  (sc, 0.0, 0.0, -sc*c[0]), (0.0, 0.0, 0.0, 1.0)))
+
+        self.elVBO=VBO(idx_out, target=GL_ELEMENT_ARRAY_BUFFER)
+        self.elCount=len(idx_out.flatten())
+
+        print('made VBO')
+        self.vtVBO.bind()
+
+    def load_stack(self, stack_fn):
+        data = open_tiff(stack_fn)
+
+        print('data shape', data.shape)
+
+        s = np.array(data, dtype=np.uint8, order='F')
+
+        print(s.shape)
+
+        w, h, d = s.shape
+        print('shape', s.shape)
+
+        stack_texture = glGenTextures(1)
+        print(stack_texture)
+
+        glActiveTexture(GL_TEXTURE0)
+        glBindTexture(GL_TEXTURE_3D, stack_texture)
+
+        glTexParameter(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glTexParameter(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
+
+       # glTexParameter(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+       # glTexParameter(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+       # glTexParameter(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE)
+
+        glTexImage3D(GL_TEXTURE_3D, 0, GL_R8, d, h, w, 0, GL_RED, GL_UNSIGNED_BYTE, s)
+        print("made 3D texture")
+        return stack_texture, s.shape
+
+
 class RenderWindow(object):
     def __init__(self):
         glutInit([])
@@ -82,7 +161,7 @@ class RenderWindow(object):
         self.height = 600
         self.PMatrix = np.eye(4)
         self.VMatrix = np.eye(4)
-        self.objs = []
+        self.volue_objects = []
         self.moving = False
         self.bfTex = None
         self.fbo = None
@@ -107,59 +186,20 @@ class RenderWindow(object):
 
 
     def make_volume_obj(self, fn, spacing):
-        o = Obj()
 
-        o.stack_texture, shape = self.load_stack(fn)
+        self.volume_object = VolumeObject(fn, spacing)
 
-        o.vao = glGenVertexArrays(1)
-        glBindVertexArray(o.vao)
-
-        tl = np.array((shape[2]*spacing[2],
-                       shape[1]*spacing[1],
-                       shape[0]*spacing[0]))
-
-        vb = [ [ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-               [ tl[0], 0.0, 0.0, 1.0, 0.0, 0.0],
-               [ 0.0, tl[1], 0.0, 0.0, 1.0, 0.0],
-               [ tl[0], tl[1], 0.0, 1.0, 1.0, 0.0],
-               [ 0.0, 0.0, tl[2], 0.0, 0.0, 1.0],
-               [ tl[0], 0.0, tl[2], 1.0, 0.0, 1.0],
-               [ 0.0, tl[1], tl[2], 0.0, 1.0, 1.0],
-               [ tl[0], tl[1], tl[2], 1.0, 1.0, 1.0] ]
-
-        vb = np.array(vb, dtype=np.float32)
-        vb = vb.flatten()
-
-        idx_out = np.array([[0, 2, 1], [2, 3, 1],
-                            [1, 4, 0], [1, 5, 4],
-                            [3, 5, 1], [3, 7, 5],
-                            [2, 7, 3], [2, 6, 7],
-                            [0, 6, 2], [0, 4, 6],
-                            [5, 6, 4], [5, 7, 6]]
-                            , dtype=np.uint32)
-        o.vtVBO=VBO(vb)
-
-        sc = 1.0/la.norm(tl)
-        c = 0.5*tl
-
-        o.transform = np.array(( (0.0, 0.0, sc, -sc*c[2]), (0.0, sc, 0.0, -sc*c[1]),  (sc, 0.0, 0.0, -sc*c[0]), (0.0, 0.0, 0.0, 1.0)))
-
-        o.elVBO=VBO(idx_out, target=GL_ELEMENT_ARRAY_BUFFER)
-        o.elCount=len(idx_out.flatten())
-
-        print('made VBO')
-        o.vtVBO.bind()
 
         glEnableVertexAttribArray( self.b_shader.get_attrib("position") )
         glVertexAttribPointer(
             self.b_shader.get_attrib("position"),
-            3, GL_FLOAT, False, self.volume_stride, o.vtVBO
+            3, GL_FLOAT, False, self.volume_stride, self.volume_object.vtVBO
             )
 
         glEnableVertexAttribArray( self.b_shader.get_attrib("texcoord") )
         glVertexAttribPointer(
             self.b_shader.get_attrib("texcoord"),
-            3, GL_FLOAT, False, self.volume_stride, o.vtVBO+12
+            3, GL_FLOAT, False, self.volume_stride, self.volume_object.vtVBO+12
             )
 
         glBindVertexArray( 0 )
@@ -168,7 +208,7 @@ class RenderWindow(object):
 
         glBindBuffer(GL_ARRAY_BUFFER, 0)
 
-        return o
+        self.volue_objects.append(self.volume_object)
 
     def on_multi_button(self, bid, x, y, s):
         pass
@@ -215,8 +255,8 @@ class RenderWindow(object):
         glClearColor(0.0,0.0,0.0,1.0)
 
         self.VMatrix = translation_matrix((0, 0, -self.dist)).dot(self.ball.matrix()).dot(scale_matrix(self.zoom))
-        for obj in self.objs:
-            self.render_volume_obj(obj)
+        for volume_object in self.volue_objects:
+            self.render_volume_obj(volume_object)
         glutSwapBuffers()
 
 
@@ -257,43 +297,12 @@ class RenderWindow(object):
 
         glBindTexture(GL_TEXTURE_2D, 0)
 
-    def load_stack(self, stack_fn):
-        data = open_tiff(stack_fn)
-
-        print('data shape', data.shape)
-
-        s = np.array(data, dtype=np.uint8, order='F')
-
-        print(s.shape)
-
-        w, h, d = s.shape
-        print('shape', s.shape)
-
-        stack_texture = glGenTextures(1)
-        print(stack_texture)
-
-        glActiveTexture(GL_TEXTURE0)
-        glBindTexture(GL_TEXTURE_3D, stack_texture)
-
-        glTexParameter(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-        glTexParameter(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
-
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
-
-       # glTexParameter(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
-       # glTexParameter(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
-       # glTexParameter(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE)
-
-        glTexImage3D(GL_TEXTURE_3D, 0, GL_R8, d, h, w, 0, GL_RED, GL_UNSIGNED_BYTE, s)
-        print("made 3D texture")
-        return stack_texture, s.shape
-
-    def render_volume_obj(self, obj):
+    def render_volume_obj(self, volume_object):
 
         glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
         glViewport(0, 0, self.width, self.height)
         glActiveTexture(GL_TEXTURE0)
-        glBindTexture(GL_TEXTURE_3D, obj.stack_texture)
+        glBindTexture(GL_TEXTURE_3D, volume_object.stack_texture)
 
         glClear(GL_COLOR_BUFFER_BIT)
 
@@ -309,20 +318,20 @@ class RenderWindow(object):
         glUseProgram(self.b_shader.program)
 
 
-        glBindVertexArray( obj.vao )
-        print("copied", obj.elVBO.copied)
-        obj.elVBO.bind()
+        glBindVertexArray( volume_object.vao )
+        print("copied", volume_object.elVBO.copied)
+        volume_object.elVBO.bind()
 
-        mv_matrix = np.dot(self.VMatrix, obj.transform)
+        mv_matrix = np.dot(self.VMatrix, volume_object.transform)
         glUniformMatrix4fv(self.b_shader.get_uniform("mv_matrix"), 1, True, mv_matrix.astype('float32'))
         glUniformMatrix4fv(self.b_shader.get_uniform("p_matrix"), 1, True, self.PMatrix.astype('float32'))
 
         glDrawElements(
-                GL_TRIANGLES, obj.elCount,
-                GL_UNSIGNED_INT, obj.elVBO
+                GL_TRIANGLES, volume_object.elCount,
+                GL_UNSIGNED_INT, volume_object.elVBO
             )
 
-        obj.elVBO.unbind()
+        volume_object.elVBO.unbind()
         glBindVertexArray( 0 )
         glUseProgram(0)
 
@@ -332,7 +341,7 @@ class RenderWindow(object):
         glBindTexture(GL_TEXTURE_2D, self.bfTex)
 
         glActiveTexture(GL_TEXTURE0)
-        glBindTexture(GL_TEXTURE_3D, obj.stack_texture)
+        glBindTexture(GL_TEXTURE_3D, volume_object.stack_texture)
 
 
         glUseProgram(self.f_shader.program)
@@ -346,22 +355,22 @@ class RenderWindow(object):
         glEnable(GL_CULL_FACE)
         glCullFace(GL_FRONT)
 
-        glBindVertexArray(obj.vao)
-        obj.elVBO.bind()
+        glBindVertexArray(volume_object.vao)
+        volume_object.elVBO.bind()
 
         glUniformMatrix4fv(self.f_shader.get_uniform("mv_matrix"), 1, True, mv_matrix.astype('float32'))
         glUniformMatrix4fv(self.f_shader.get_uniform("p_matrix"), 1, True, self.PMatrix.astype('float32'))
 
         glDrawElements(
-                GL_TRIANGLES, obj.elCount,
-                GL_UNSIGNED_INT, obj.elVBO
+                GL_TRIANGLES, volume_object.elCount,
+                GL_UNSIGNED_INT, volume_object.elVBO
             )
 
         glActiveTexture(GL_TEXTURE0+1)
         glBindTexture(GL_TEXTURE_2D, 0)
 
         glCullFace(GL_BACK)
-        obj.elVBO.unbind()
+        volume_object.elVBO.unbind()
         glBindVertexArray( 0 )
         glUseProgram(0)
 
@@ -381,7 +390,7 @@ def main():
     else:
         spacing = (1.0, 1.0, 1.0)
     r.initGL()
-    r.objs.append(r.make_volume_obj(sys.argv[1], spacing))
+    r.make_volume_obj(sys.argv[1], spacing)
     r.start()
 
 if __name__ == '__main__':
