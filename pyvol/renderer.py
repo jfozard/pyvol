@@ -70,17 +70,6 @@ def perspective(fovy, aspect, zNear, zFar):
     f = 1.0/math.tan(fovy/2.0/180*math.pi)
     return np.array(((f/aspect, 0, 0, 0), (0,f,0,0), (0,0,(zFar+zNear)/(zNear-zFar), 2*zFar*zNear/(zNear-zFar)), (0, 0, -1, 0)))
 
-def link_shader_program(vertex_shader, fragment_shader):
-    """Create a shader program with from compiled shaders."""
-    program = glCreateProgram()
-    glAttachShader(program, vertex_shader)
-    glAttachShader(program, fragment_shader)
-    glLinkProgram(program)
-    # check linking error
-    result = glGetProgramiv(program, GL_LINK_STATUS)
-    if not(result):
-        raise RuntimeError(glGetProgramInfoLog(program))
-    return program
 
 class RenderWindow(object):
     def __init__(self):
