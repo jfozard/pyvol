@@ -17,7 +17,7 @@ from OpenGL.GL.ARB.texture_rg import *
 from OpenGL.GL.framebufferobjects import *
 from OpenGL.GL.shaders import *
 
-from transformations import Arcball
+from transformations import Arcball, translation_matrix, scale_matrix
 
 from PIL import Image
 
@@ -44,21 +44,6 @@ def open_tiff(fn):
     im = np.dstack(frames)
     del frames
     return im
-
-def translate(x,y,z):
-    a = np.eye(4)
-    a[0,3]=x
-    a[1,3]=y
-    a[2,3]=z
-    return a
-
-def scale(s):
-    a = np.eye((4))
-    a[0,0]=s
-    a[1,1]=s
-    a[2,2]=s
-    a[3,3]=1.0
-    return a
 
 def perspective(fovy, aspect, zNear, zFar):
     f = 1.0/math.tan(fovy/2.0/180*math.pi)
@@ -266,7 +251,7 @@ class RenderWindow(object):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glClearColor(0.0,0.0,0.0,1.0)
 
-        self.VMatrix = translate(0, 0, -self.dist).dot(self.ball.matrix()).dot(scale(self.zoom))
+        self.VMatrix = translation_matrix((0, 0, -self.dist)).dot(self.ball.matrix()).dot(scale_matrix(self.zoom))
         for obj in self.objs:
             self.render_volume_obj(obj)
         glutSwapBuffers()
