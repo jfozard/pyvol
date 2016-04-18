@@ -18,8 +18,7 @@ from OpenGL.GL.framebufferobjects import *
 from OpenGL.GL.shaders import *
 
 from transformations import Arcball, translation_matrix, scale_matrix
-
-from PIL import Image
+from tiff_parser import open_tiff
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 SHADER_SOURCE_DIR = os.path.join(HERE, "shaders")
@@ -47,24 +46,6 @@ class ShaderProgram(object):
     def get_uniform(self, name):
         return glGetUniformLocation(self.program, name)
 
-
-def open_tiff(fn):
-    im = Image.open(fn)
-    frames = []
-    i = 0
-    try:
-        while True:
-            im.seek(i)
-            # i2 = np.sum(np.asarray(im), axis=2)
-            i2 = np.asarray(im)
-            frames.append(i2)
-            i += 1
-    except EOFError:
-        pass
-
-    im = np.dstack(frames)
-    del frames
-    return im
 
 def perspective(fovy, aspect, zNear, zFar):
     f = 1.0/math.tan(fovy/2.0/180*math.pi)
