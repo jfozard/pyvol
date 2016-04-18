@@ -126,28 +126,9 @@ class RenderWindow(object):
 
         vs.vStride = 6*4
 
-        vs.f_shader = link_shader_program(vertex, front_fragment)
+        self.f_shader = ShaderProgram(vertex, front_fragment)
+        vs.f_shader = self.f_shader.program
 
-        vs.f_position_location = glGetAttribLocation(
-            vs.f_shader, 'position'
-            )
-        vs.f_texcoord_location = glGetAttribLocation(
-            vs.f_shader, 'texcoord'
-            )
-
-        vs.f_mv_location = glGetUniformLocation(
-            vs.f_shader, 'mv_matrix'
-            )
-        vs.f_p_location = glGetUniformLocation(
-            vs.f_shader, 'p_matrix'
-            )
-
-        vs.f_bfTex_location = glGetUniformLocation(
-            vs.f_shader, 'backfaceTex'
-            )
-        vs.f_t3d_location = glGetUniformLocation(
-            vs.f_shader, 'texture3d'
-            )
         self.volume_shaders = vs
 
     def make_volume_obj(self, fn, spacing):
@@ -382,8 +363,8 @@ class RenderWindow(object):
 
         glUseProgram(vs.f_shader)
 
-        glUniform1i(vs.f_t3d_location, 0)
-        glUniform1i(vs.f_bfTex_location, 1)
+        glUniform1i(self.f_shader.get_uniform("texture3s"), 0)
+        glUniform1i(self.f_shader.get_uniform("backfaceTex"), 1)
 
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
@@ -394,8 +375,8 @@ class RenderWindow(object):
         glBindVertexArray(obj.vao)
         obj.elVBO.bind()
 
-        glUniformMatrix4fv(vs.f_mv_location, 1, True, mv_matrix.astype('float32'))
-        glUniformMatrix4fv(vs.f_p_location, 1, True, self.PMatrix.astype('float32'))
+        glUniformMatrix4fv(self.f_shader.get_uniform("mv_matrix"), 1, True, mv_matrix.astype('float32'))
+        glUniformMatrix4fv(self.f_shader.get_uniform("p_matrix"), 1, True, self.PMatrix.astype('float32'))
 
         glDrawElements(
                 GL_TRIANGLES, obj.elCount,
