@@ -29,6 +29,23 @@ def perspective(fovy, aspect, zNear, zFar):
     return np.array(((f/aspect, 0, 0, 0), (0,f,0,0), (0,0,(zFar+zNear)/(zNear-zFar), 2*zFar*zNear/(zNear-zFar)), (0, 0, -1, 0)))
 
 
+def _compile_shader_from_source(fname, shader_type):
+    """Return compiled shader; assumes fname is in shaders dir"""
+    with open(os.path.join(SHADER_SOURCE_DIR, fname)) as fh:
+        source = fh.read()
+    return compileShader(source, shader_type)
+
+
+def compile_vertex_shader_from_source(fname):
+    """Return compiled vertex shader; assumes fname is in shaders dir"""
+    return _compile_shader_from_source(fname, GL_VERTEX_SHADER)
+
+
+def compile_fragment_shader_from_source(fname):
+    """Return compiled fragment shader; assumes fname is in shaders dir"""
+    return _compile_shader_from_source(fname, GL_FRAGMENT_SHADER)
+
+
 class Obj():
     pass
 
@@ -80,18 +97,9 @@ class RenderWindow(object):
 
     def make_volume_shaders(self):
 
-        with open(os.path.join(SHADER_SOURCE_DIR, "volumetric.vs")) as fh:
-            vs_source = fh.read()
-        vertex = compileShader(vs_source, GL_VERTEX_SHADER)
-
-        with open(os.path.join(SHADER_SOURCE_DIR, "front.frag")) as fh:
-            front_frag_source = fh.read()
-        front_fragment = compileShader(front_frag_source, GL_FRAGMENT_SHADER)
-
-        with open(os.path.join(SHADER_SOURCE_DIR, "back.frag")) as fh:
-            back_frag_source = fh.read()
-        back_fragment = compileShader(back_frag_source, GL_FRAGMENT_SHADER)
-
+        vertex = compile_vertex_shader_from_source("volumetric.vs")
+        front_fragment = compile_fragment_shader_from_source("front.frag")
+        back_fragment = compile_fragment_shader_from_source("back.frag")
 
         vs = Obj()
         self.b_shader = ShaderProgram(vertex, back_fragment)
