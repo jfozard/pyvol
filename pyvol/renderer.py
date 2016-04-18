@@ -27,6 +27,27 @@ SHADER_SOURCE_DIR = os.path.join(HERE, "shaders")
 class Obj():
     pass
 
+class ShaderProgram(object):
+    """OpenGL shader program."""
+
+    def __init__(self, vertex_shader, fragment_shader):
+        program = glCreateProgram()
+        glAttachShader(program, vertex_shader)
+        glAttachShader(program, fragment_shader)
+        glLinkProgram(program)
+        # check linking error
+        result = glGetProgramiv(program, GL_LINK_STATUS)
+        if not(result):
+            raise RuntimeError(glGetProgramInfoLog(program))
+        self.program = program
+
+    def get_attrib(self, name):
+        return glGetAttribLocation(self.program, name)
+
+    def get_uniform(self, name):
+        return glGetUniformLocation(self.program, name)
+
+
 def open_tiff(fn):
     im = Image.open(fn)
     frames = []
@@ -101,21 +122,7 @@ class RenderWindow(object):
 
 
         vs = Obj()
-        vs.b_shader = link_shader_program(vertex, back_fragment)
-
-        vs.b_position_location = glGetAttribLocation(
-            vs.b_shader, 'position'
-            )
-        vs.b_texcoord_location = glGetAttribLocation(
-            vs.b_shader, 'texcoord'
-            )
-
-        vs.b_mv_location = glGetUniformLocation(
-            vs.b_shader, 'mv_matrix'
-            )
-        vs.b_p_location = glGetUniformLocation(
-            vs.b_shader, 'p_matrix'
-            )
+        self.b_shader = ShaderProgram(vertex, back_fragment)
 
         vs.vStride = 6*4
 
@@ -180,21 +187,21 @@ class RenderWindow(object):
         print('made VBO')
         o.vtVBO.bind()
 
-        glEnableVertexAttribArray( vs.b_position_location )
+        glEnableVertexAttribArray( self.b_shader.get_attrib("position") )
         glVertexAttribPointer(
-            vs.b_position_location,
+            self.b_shader.get_attrib("position"),
             3, GL_FLOAT, False, vs.vStride, o.vtVBO
             )
 
-        glEnableVertexAttribArray( vs.b_texcoord_location )
+        glEnableVertexAttribArray( self.b_shader.get_attrib("texcoord") )
         glVertexAttribPointer(
-            vs.b_texcoord_location,
+            self.b_shader.get_attrib("texcoord"),
             3, GL_FLOAT, False, vs.vStride, o.vtVBO+12
             )
 
         glBindVertexArray( 0 )
-        glDisableVertexAttribArray( vs.b_position_location )
-        glDisableVertexAttribArray( vs.b_texcoord_location )
+        glDisableVertexAttribArray( self.b_shader.get_attrib("position") )
+        glDisableVertexAttribArray( self.b_shader.get_attrib("texcoord") )
 
         o.elVBO=VBO(idx_out, target=GL_ELEMENT_ARRAY_BUFFER)
         o.elCount=len(idx_out.flatten())
@@ -340,11 +347,11 @@ class RenderWindow(object):
 
         glCullFace(GL_BACK) #NB flipped
 
-#        glValidateProgram(vs.b_shader)
-#        print("b_valid ", glGetProgramiv(vs.b_shader, GL_VALIDATE_STATUS))
-#        print(glGetProgramInfoLog(vs.b_shader).decode())
+#        glValidateProgram(self.b_shader.program)
+#        print("b_valid ", glGetProgramiv(self.b_shader.program, GL_VALIDATE_STATUS))
+#        print(glGetProgramInfoLog(self.b_shader.program).decode())
 
-        glUseProgram(vs.b_shader)
+        glUseProgram(self.b_shader.program)
 
 
         glBindVertexArray( obj.vao )
@@ -352,8 +359,8 @@ class RenderWindow(object):
         obj.elVBO.bind()
 
         mv_matrix = np.dot(self.VMatrix, obj.transform)
-        glUniformMatrix4fv(vs.b_mv_location, 1, True, mv_matrix.astype('float32'))
-        glUniformMatrix4fv(vs.b_p_location, 1, True, self.PMatrix.astype('float32'))
+        glUniformMatrix4fv(self.b_shader.get_uniform("mv_matrix"), 1, True, mv_matrix.astype('float32'))
+        glUniformMatrix4fv(self.b_shader.get_uniform("p_matrix"), 1, True, self.PMatrix.astype('float32'))
 
         glDrawElements(
                 GL_TRIANGLES, obj.elCount,
