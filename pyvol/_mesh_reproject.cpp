@@ -33,8 +33,8 @@ extern "C" void _mesh_reproject(unsigned char* A, int I, int J, int K, double* s
   const Eigen::Vector3d bbox0(0, 0, 0);
   const Eigen::Vector3d bbox1(I-1, J-1, K-1);
   Eigen::Vector3d sp = Eigen::Map<Eigen::Vector3d>(spacing);
-  //  Eigen::VectorXd u(NV);
-  //  u.setZero();
+  Eigen::VectorXd u(NV);
+  u.setZero();
   
   #pragma omp for
   for(int i=0; i<NV; i++)
@@ -45,9 +45,18 @@ extern "C" void _mesh_reproject(unsigned char* A, int I, int J, int K, double* s
       double l = sample3D(A, I, J, K, p2);
 
       //      std::cout << v.transpose() << " " << l << " " << level << " " << t << " " << n.transpose();
-      v += t*exp(-(l/level))*n;
+      u[i] = exp(-(l/level));
       //std::cout << " " << v.transpose() <<"\n";
     }
+
+  #pragma omp for
+  for(int i=0; i<NV; i++)
+    {
+      Eigen::Map<Eigen::Vector3d> v(&verts[3*i]);
+      Eigen::Map<Eigen::Vector3d> n(&norms[3*i]);
+      v += u[i]*t*n;
+    }
+  
 }
 
 
