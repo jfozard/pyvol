@@ -46,10 +46,6 @@ def compile_fragment_shader_from_source(fname):
     return _compile_shader_from_source(fname, GL_FRAGMENT_SHADER)
 
 
-class Obj():
-    pass
-
-
 class ShaderProgram(object):
     """OpenGL shader program."""
 
@@ -189,7 +185,6 @@ class RenderWindow(object):
 
         self.volume_object = VolumeObject(fn, spacing)
 
-
         glEnableVertexAttribArray( self.b_shader.get_attrib("position") )
         glVertexAttribPointer(
             self.b_shader.get_attrib("position"),
@@ -288,7 +283,6 @@ class RenderWindow(object):
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0, GL_RGBA, GL_FLOAT, None)
         print("made texture img")
 
-
         glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
 
         glFramebufferTexture2D(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, self.bfTex, 0)
@@ -373,7 +367,6 @@ class RenderWindow(object):
         volume_object.elVBO.unbind()
         glBindVertexArray( 0 )
         glUseProgram(0)
-
 
     def key(self, k, x, y):
         if k=='+':
