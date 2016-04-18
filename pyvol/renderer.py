@@ -23,8 +23,15 @@ from tiff_parser import open_tiff
 HERE = os.path.dirname(os.path.realpath(__file__))
 SHADER_SOURCE_DIR = os.path.join(HERE, "shaders")
 
+
+def perspective(fovy, aspect, zNear, zFar):
+    f = 1.0/math.tan(fovy/2.0/180*math.pi)
+    return np.array(((f/aspect, 0, 0, 0), (0,f,0,0), (0,0,(zFar+zNear)/(zNear-zFar), 2*zFar*zNear/(zNear-zFar)), (0, 0, -1, 0)))
+
+
 class Obj():
     pass
+
 
 class ShaderProgram(object):
     """OpenGL shader program."""
@@ -45,11 +52,6 @@ class ShaderProgram(object):
 
     def get_uniform(self, name):
         return glGetUniformLocation(self.program, name)
-
-
-def perspective(fovy, aspect, zNear, zFar):
-    f = 1.0/math.tan(fovy/2.0/180*math.pi)
-    return np.array(((f/aspect, 0, 0, 0), (0,f,0,0), (0,0,(zFar+zNear)/(zNear-zFar), 2*zFar*zNear/(zNear-zFar)), (0, 0, -1, 0)))
 
 
 class RenderWindow(object):
@@ -370,8 +372,6 @@ class RenderWindow(object):
         glutPostRedisplay()
 
 
-
-
 def main():
     r = RenderWindow()
     if len(sys.argv)>=5:
@@ -384,7 +384,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-
-
-
