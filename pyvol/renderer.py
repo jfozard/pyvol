@@ -104,7 +104,7 @@ class RenderWindow(object):
         vs = Obj()
         self.b_shader = ShaderProgram(vertex, back_fragment)
 
-        vs.vStride = 6*4
+        self.volume_stride = 6 * 4
 
         self.f_shader = ShaderProgram(vertex, front_fragment)
         vs.f_shader = self.f_shader.program
@@ -151,13 +151,13 @@ class RenderWindow(object):
         glEnableVertexAttribArray( self.b_shader.get_attrib("position") )
         glVertexAttribPointer(
             self.b_shader.get_attrib("position"),
-            3, GL_FLOAT, False, vs.vStride, o.vtVBO
+            3, GL_FLOAT, False, self.volume_stride, o.vtVBO
             )
 
         glEnableVertexAttribArray( self.b_shader.get_attrib("texcoord") )
         glVertexAttribPointer(
             self.b_shader.get_attrib("texcoord"),
-            3, GL_FLOAT, False, vs.vStride, o.vtVBO+12
+            3, GL_FLOAT, False, self.volume_stride, o.vtVBO+12
             )
 
         glBindVertexArray( 0 )
