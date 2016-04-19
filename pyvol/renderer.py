@@ -7,7 +7,7 @@ import math
 
 import OpenGL.GL
 import OpenGL.GLUT
-from OpenGL.GL.shaders import *
+import OpenGL.GL.shaders
 from OpenGL.GL.framebufferobjects import *
 
 from OpenGL.arrays.vbo import *
@@ -35,38 +35,38 @@ def _compile_shader_from_source(fname, shader_type):
     """Return compiled shader; assumes fname is in shaders dir"""
     with open(os.path.join(SHADER_SOURCE_DIR, fname)) as fh:
         source = fh.read()
-    return compileShader(source, shader_type)
+    return OpenGL.GL.shaders.compileShader(source, shader_type)
 
 
 def compile_vertex_shader_from_source(fname):
     """Return compiled vertex shader; assumes fname is in shaders dir"""
-    return _compile_shader_from_source(fname, GL_VERTEX_SHADER)
+    return _compile_shader_from_source(fname, OpenGL.GL.shaders.GL_VERTEX_SHADER)
 
 
 def compile_fragment_shader_from_source(fname):
     """Return compiled fragment shader; assumes fname is in shaders dir"""
-    return _compile_shader_from_source(fname, GL_FRAGMENT_SHADER)
+    return _compile_shader_from_source(fname, OpenGL.GL.shaders.GL_FRAGMENT_SHADER)
 
 
 class ShaderProgram(object):
     """OpenGL shader program."""
 
     def __init__(self, vertex_shader, fragment_shader):
-        program = glCreateProgram()
-        glAttachShader(program, vertex_shader)
-        glAttachShader(program, fragment_shader)
-        glLinkProgram(program)
+        program = OpenGL.GL.shaders.glCreateProgram()
+        OpenGL.GL.shaders.glAttachShader(program, vertex_shader)
+        OpenGL.GL.shaders.glAttachShader(program, fragment_shader)
+        OpenGL.GL.shaders.glLinkProgram(program)
         # check linking error
-        result = glGetProgramiv(program, GL_LINK_STATUS)
+        result = OpenGL.GL.shaders.glGetProgramiv(program, OpenGL.GL.shaders.GL_LINK_STATUS)
         if not(result):
             raise RuntimeError(glGetProgramInfoLog(program))
         self.program = program
 
     def get_attrib(self, name):
-        return glGetAttribLocation(self.program, name)
+        return OpenGL.GL.shaders.glGetAttribLocation(self.program, name)
 
     def get_uniform(self, name):
-        return glGetUniformLocation(self.program, name)
+        return OpenGL.GL.shaders.glGetUniformLocation(self.program, name)
 
 
 class VolumeObject(object):
@@ -191,21 +191,21 @@ class RenderWindow(object):
 
         self.volume_object = VolumeObject(fn, spacing)
 
-        glEnableVertexAttribArray( self.b_shader.get_attrib("position") )
-        glVertexAttribPointer(
+        OpenGL.GL.shaders.glEnableVertexAttribArray( self.b_shader.get_attrib("position") )
+        OpenGL.GL.shaders.glVertexAttribPointer(
             self.b_shader.get_attrib("position"),
             3, GL_FLOAT, False, self.volume_stride, self.volume_object.vtVBO
             )
 
-        glEnableVertexAttribArray( self.b_shader.get_attrib("texcoord") )
-        glVertexAttribPointer(
+        OpenGL.GL.shaders.glEnableVertexAttribArray( self.b_shader.get_attrib("texcoord") )
+        OpenGL.GL.shaders.glVertexAttribPointer(
             self.b_shader.get_attrib("texcoord"),
             3, GL_FLOAT, False, self.volume_stride, self.volume_object.vtVBO+12
             )
 
         glBindVertexArray( 0 )
-        glDisableVertexAttribArray( self.b_shader.get_attrib("position") )
-        glDisableVertexAttribArray( self.b_shader.get_attrib("texcoord") )
+        OpenGL.GL.shaders.glDisableVertexAttribArray( self.b_shader.get_attrib("position") )
+        OpenGL.GL.shaders.glDisableVertexAttribArray( self.b_shader.get_attrib("texcoord") )
 
         OpenGL.GL.glBindBuffer(OpenGL.GL.GL_ARRAY_BUFFER, 0)
 
@@ -324,7 +324,7 @@ class RenderWindow(object):
 #        print("b_valid ", glGetProgramiv(self.b_shader.program, GL_VALIDATE_STATUS))
 #        print(glGetProgramInfoLog(self.b_shader.program).decode())
 
-        glUseProgram(self.b_shader.program)
+        OpenGL.GL.shaders.glUseProgram(self.b_shader.program)
 
 
         glBindVertexArray( volume_object.vao )
@@ -332,8 +332,8 @@ class RenderWindow(object):
         volume_object.elVBO.bind()
 
         mv_matrix = np.dot(self.VMatrix, volume_object.transform)
-        glUniformMatrix4fv(self.b_shader.get_uniform("mv_matrix"), 1, True, mv_matrix.astype('float32'))
-        glUniformMatrix4fv(self.b_shader.get_uniform("p_matrix"), 1, True, self.PMatrix.astype('float32'))
+        OpenGL.GL.shaders.glUniformMatrix4fv(self.b_shader.get_uniform("mv_matrix"), 1, True, mv_matrix.astype('float32'))
+        OpenGL.GL.shaders.glUniformMatrix4fv(self.b_shader.get_uniform("p_matrix"), 1, True, self.PMatrix.astype('float32'))
 
         OpenGL.GL.glDrawElements(
                 OpenGL.GL.GL_TRIANGLES, volume_object.elCount,
@@ -342,7 +342,7 @@ class RenderWindow(object):
 
         volume_object.elVBO.unbind()
         glBindVertexArray( 0 )
-        glUseProgram(0)
+        OpenGL.GL.shaders.glUseProgram(0)
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0)
 
@@ -353,10 +353,10 @@ class RenderWindow(object):
         OpenGL.GL.glBindTexture(OpenGL.GL.GL_TEXTURE_3D, volume_object.stack_texture)
 
 
-        glUseProgram(self.f_shader.program)
+        OpenGL.GL.shaders.glUseProgram(self.f_shader.program)
 
-        glUniform1i(self.f_shader.get_uniform("texture3s"), 0)
-        glUniform1i(self.f_shader.get_uniform("backfaceTex"), 1)
+        OpenGL.GL.shaders.glUniform1i(self.f_shader.get_uniform("texture3s"), 0)
+        OpenGL.GL.shaders.glUniform1i(self.f_shader.get_uniform("backfaceTex"), 1)
 
 
         OpenGL.GL.glClear(OpenGL.GL.GL_COLOR_BUFFER_BIT | OpenGL.GL.GL_DEPTH_BUFFER_BIT )
@@ -367,8 +367,8 @@ class RenderWindow(object):
         OpenGL.GL.glBindVertexArray(volume_object.vao)
         volume_object.elVBO.bind()
 
-        glUniformMatrix4fv(self.f_shader.get_uniform("mv_matrix"), 1, True, mv_matrix.astype('float32'))
-        glUniformMatrix4fv(self.f_shader.get_uniform("p_matrix"), 1, True, self.PMatrix.astype('float32'))
+        OpenGL.GL.shaders.glUniformMatrix4fv(self.f_shader.get_uniform("mv_matrix"), 1, True, mv_matrix.astype('float32'))
+        OpenGL.GL.shaders.glUniformMatrix4fv(self.f_shader.get_uniform("p_matrix"), 1, True, self.PMatrix.astype('float32'))
 
         OpenGL.GL.glDrawElements(
                 OpenGL.GL.GL_TRIANGLES, volume_object.elCount,
@@ -381,7 +381,7 @@ class RenderWindow(object):
         OpenGL.GL.glCullFace(OpenGL.GL.GL_BACK)
         volume_object.elVBO.unbind()
         OpenGL.GL.glBindVertexArray( 0 )
-        glUseProgram(0)
+        OpenGL.GL.shaders.glUseProgram(0)
 
     def key(self, k, x, y):
         if k=='+':
