@@ -11,7 +11,7 @@ import OpenGL.GL.shaders
 import OpenGL.GL.framebufferobjects
 
 import OpenGL.arrays.vbo
-from OpenGL.GL.ARB.vertex_array_object import *
+import OpenGL.GL.ARB.vertex_array_object
 from OpenGL.GL.ARB.texture_rg import *
 
 from transformations import Arcball, translation_matrix, scale_matrix
@@ -74,8 +74,8 @@ class VolumeObject(object):
     def __init__(self, fn, spacing):
         self.stack_texture, shape = self.load_stack(fn)
 
-        self.vao = glGenVertexArrays(1)
-        glBindVertexArray(self.vao)
+        self.vao = OpenGL.GL.ARB.vertex_array_object.glGenVertexArrays(1)
+        OpenGL.GL.ARB.vertex_array_object.glBindVertexArray(self.vao)
 
         tl = np.array((shape[2]*spacing[2],
                        shape[1]*spacing[1],
@@ -203,7 +203,7 @@ class RenderWindow(object):
             3, GL_FLOAT, False, self.volume_stride, self.volume_object.vtVBO+12
             )
 
-        glBindVertexArray( 0 )
+        OpenGL.GL.ARB.vertex_array_object.glBindVertexArray( 0 )
         OpenGL.GL.shaders.glDisableVertexAttribArray( self.b_shader.get_attrib("position") )
         OpenGL.GL.shaders.glDisableVertexAttribArray( self.b_shader.get_attrib("texcoord") )
 
@@ -327,7 +327,7 @@ class RenderWindow(object):
         OpenGL.GL.shaders.glUseProgram(self.b_shader.program)
 
 
-        glBindVertexArray( volume_object.vao )
+        OpenGL.GL.ARB.vertex_array_object.glBindVertexArray( volume_object.vao )
         print("copied", volume_object.elVBO.copied)
         volume_object.elVBO.bind()
 
@@ -341,7 +341,7 @@ class RenderWindow(object):
             )
 
         volume_object.elVBO.unbind()
-        glBindVertexArray( 0 )
+        OpenGL.GL.ARB.vertex_array_object.glBindVertexArray( 0 )
         OpenGL.GL.shaders.glUseProgram(0)
 
         OpenGL.GL.framebufferobjects.glBindFramebuffer(OpenGL.GL.framebufferobjects.GL_FRAMEBUFFER, 0)
