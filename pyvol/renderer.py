@@ -13,8 +13,6 @@ from OpenGL.GL.framebufferobjects import *
 from OpenGL.arrays.vbo import *
 from OpenGL.GL.ARB.vertex_array_object import *
 from OpenGL.GL.ARB.texture_rg import *
-from OpenGL.GL.framebufferobjects import *
-from OpenGL.GL.shaders import *
 
 from transformations import Arcball, translation_matrix, scale_matrix
 from tiff_parser import open_tiff
