@@ -10,7 +10,7 @@ import OpenGL.GLUT
 import OpenGL.GL.shaders
 import OpenGL.GL.framebufferobjects
 
-from OpenGL.arrays.vbo import *
+import OpenGL.arrays.vbo
 from OpenGL.GL.ARB.vertex_array_object import *
 from OpenGL.GL.ARB.texture_rg import *
 
@@ -103,14 +103,14 @@ class VolumeObject(object):
                             [0, 6, 2], [0, 4, 6],
                             [5, 6, 4], [5, 7, 6]]  # Triangle 10, triangle 11.
                             , dtype=np.uint32)
-        self.vtVBO=VBO(vb)
+        self.vtVBO=OpenGL.arrays.vbo.VBO(vb)
 
         sc = 1.0/la.norm(tl)
         c = 0.5*tl
 
         self.transform = np.array(( (0.0, 0.0, sc, -sc*c[2]), (0.0, sc, 0.0, -sc*c[1]),  (sc, 0.0, 0.0, -sc*c[0]), (0.0, 0.0, 0.0, 1.0)))
 
-        self.elVBO=VBO(idx_out, target=OpenGL.GL.GL_ELEMENT_ARRAY_BUFFER)
+        self.elVBO=OpenGL.arrays.vbo.VBO(idx_out, target=OpenGL.GL.GL_ELEMENT_ARRAY_BUFFER)
         self.elCount=len(idx_out.flatten())
 
         print('made VBO')
