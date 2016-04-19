@@ -6,7 +6,7 @@ import numpy.linalg as la
 import math
 
 import OpenGL.GL
-from OpenGL.GLUT import *
+import OpenGL.GLUT
 from OpenGL.GL.shaders import *
 from OpenGL.GL.framebufferobjects import *
 
@@ -156,11 +156,11 @@ class VolumeObject(object):
 
 class RenderWindow(object):
     def __init__(self):
-        glutInit([])
-        glutInitContextVersion(3, 2)
-        glutInitWindowSize(800, 600)
-        glutInitDisplayMode(GLUT_RGBA | GLUT_DEPTH)
-        self.window = glutCreateWindow("Cell surface")
+        OpenGL.GLUT.glutInit([])
+        OpenGL.GLUT.glutInitContextVersion(3, 2)
+        OpenGL.GLUT.glutInitWindowSize(800, 600)
+        OpenGL.GLUT.glutInitDisplayMode(OpenGL.GLUT.GLUT_RGBA | OpenGL.GLUT.GLUT_DEPTH)
+        self.window = OpenGL.GLUT.glutCreateWindow("Cell surface")
         self.width = 800
         self.height = 600
         self.PMatrix = np.eye(4)
@@ -226,23 +226,23 @@ class RenderWindow(object):
 
     def on_mouse_wheel(self, b, d, x, y):
         self.dist += self.dist/15.0 * d;
-        glutPostRedisplay()
+        OpenGL.GLUT.glutPostRedisplay()
 
     def on_mouse_move(self, x, y, z=0):
         if self.moving:
             self.ex, self.ey = x, y
             self.ball.drag([x,y])
-            glutPostRedisplay()
+            OpenGL.GLUT.glutPostRedisplay()
 
     def start(self):
-        glutDisplayFunc(self.draw)
-        glutReshapeFunc(self.reshape)
-        glutKeyboardFunc(self.key)
-        glutMouseFunc(self.on_mouse_button)
-        glutMouseWheelFunc(self.on_mouse_button)
-        glutMotionFunc(self.on_mouse_move)
+        OpenGL.GLUT.glutDisplayFunc(self.draw)
+        OpenGL.GLUT.glutReshapeFunc(self.reshape)
+        OpenGL.GLUT.glutKeyboardFunc(self.key)
+        OpenGL.GLUT.glutMouseFunc(self.on_mouse_button)
+        OpenGL.GLUT.glutMouseWheelFunc(self.on_mouse_button)
+        OpenGL.GLUT.glutMotionFunc(self.on_mouse_move)
 
-        glutMainLoop()
+        OpenGL.GLUT.glutMainLoop()
 
     def reshape(self, width, height):
         self.width = width
@@ -251,7 +251,7 @@ class RenderWindow(object):
         self.PMatrix = perspective(40.0, float(width)/height, 0.1, 10000.0)
         self.ball.place([width/2,height/2],height/2)
         self.init_back_texture()
-        glutPostRedisplay()
+        OpenGL.GLUT.glutPostRedisplay()
 
     def draw(self):
         OpenGL.GL.glClear(OpenGL.GL.GL_COLOR_BUFFER_BIT | OpenGL.GL.GL_DEPTH_BUFFER_BIT)
@@ -260,7 +260,7 @@ class RenderWindow(object):
         self.VMatrix = translation_matrix((0, 0, -self.dist)).dot(self.ball.matrix()).dot(scale_matrix(self.zoom))
         for volume_object in self.volue_objects:
             self.render_volume_obj(volume_object)
-        glutSwapBuffers()
+        OpenGL.GLUT.glutSwapBuffers()
 
 
     def init_back_texture(self):
@@ -390,7 +390,7 @@ class RenderWindow(object):
             self.zoom *= 1.1
         elif k=='-':
             self.zoom *= 0.9
-        glutPostRedisplay()
+        OpenGL.GLUT.glutPostRedisplay()
 
 
 def main():
