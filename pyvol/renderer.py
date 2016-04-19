@@ -12,7 +12,7 @@ import OpenGL.GL.framebufferobjects
 
 import OpenGL.arrays.vbo
 import OpenGL.GL.ARB.vertex_array_object
-from OpenGL.GL.ARB.texture_rg import *
+import OpenGL.GL.ARB.texture_rg
 
 from transformations import Arcball, translation_matrix, scale_matrix
 from tiff_parser import open_tiff
@@ -147,7 +147,12 @@ class VolumeObject(object):
        # glTexParameter(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
        # glTexParameter(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE)
 
-        OpenGL.GL.glTexImage3D(OpenGL.GL.GL_TEXTURE_3D, 0, GL_R8, d, h, w, 0, OpenGL.GL.GL_RED, GL_UNSIGNED_BYTE, s)
+        OpenGL.GL.glTexImage3D(OpenGL.GL.GL_TEXTURE_3D, 0,
+                               OpenGL.GL.ARB.texture_rg.GL_R8,
+                               d, h, w, 0,
+                               OpenGL.GL.GL_RED,
+                               OpenGL.GL.ARB.texture_rg.GL_UNSIGNED_BYTE,
+                               s)
         print("made 3D texture")
         return stack_texture, s.shape
 
@@ -194,13 +199,13 @@ class RenderWindow(object):
         OpenGL.GL.shaders.glEnableVertexAttribArray( self.b_shader.get_attrib("position") )
         OpenGL.GL.shaders.glVertexAttribPointer(
             self.b_shader.get_attrib("position"),
-            3, GL_FLOAT, False, self.volume_stride, self.volume_object.vtVBO
+            3, OpenGL.GL.ARB.texture_rg.GL_FLOAT, False, self.volume_stride, self.volume_object.vtVBO
             )
 
         OpenGL.GL.shaders.glEnableVertexAttribArray( self.b_shader.get_attrib("texcoord") )
         OpenGL.GL.shaders.glVertexAttribPointer(
             self.b_shader.get_attrib("texcoord"),
-            3, GL_FLOAT, False, self.volume_stride, self.volume_object.vtVBO+12
+            3, OpenGL.GL.ARB.texture_rg.GL_FLOAT, False, self.volume_stride, self.volume_object.vtVBO+12
             )
 
         OpenGL.GL.ARB.vertex_array_object.glBindVertexArray( 0 )
@@ -292,7 +297,8 @@ class RenderWindow(object):
 
         OpenGL.GL.glTexImage2D(OpenGL.GL.GL_TEXTURE_2D, 0,
                                OpenGL.GL.GL_RGBA16F, w, h, 0,
-                               OpenGL.GL.GL_RGBA, GL_FLOAT, None)
+                               OpenGL.GL.GL_RGBA,
+                               OpenGL.GL.ARB.texture_rg.GL_FLOAT, None)
         print("made texture img")
 
         OpenGL.GL.framebufferobjects.glBindFramebuffer(OpenGL.GL.framebufferobjects.GL_FRAMEBUFFER, self.fbo)
