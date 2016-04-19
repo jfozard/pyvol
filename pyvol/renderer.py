@@ -8,7 +8,7 @@ import math
 import OpenGL.GL
 import OpenGL.GLUT
 import OpenGL.GL.shaders
-from OpenGL.GL.framebufferobjects import *
+import OpenGL.GL.framebufferobjects
 
 from OpenGL.arrays.vbo import *
 from OpenGL.GL.ARB.vertex_array_object import *
@@ -264,7 +264,7 @@ class RenderWindow(object):
     def init_back_texture(self):
 
         if self.fbo == None:
-            self.fbo = glGenFramebuffers(1)
+            self.fbo = OpenGL.GL.framebufferobjects.glGenFramebuffers(1)
         print("fbo", self.fbo)
 
         OpenGL.GL.glActiveTexture(OpenGL.GL.GL_TEXTURE0 + 1)
@@ -295,20 +295,20 @@ class RenderWindow(object):
                                OpenGL.GL.GL_RGBA, GL_FLOAT, None)
         print("made texture img")
 
-        glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
+        OpenGL.GL.framebufferobjects.glBindFramebuffer(OpenGL.GL.framebufferobjects.GL_FRAMEBUFFER, self.fbo)
 
-        OpenGL.GL.glFramebufferTexture2D(GL_FRAMEBUFFER_EXT,
-                                         GL_COLOR_ATTACHMENT0_EXT,
+        OpenGL.GL.glFramebufferTexture2D(OpenGL.GL.framebufferobjects.GL_FRAMEBUFFER_EXT,
+                                         OpenGL.GL.framebufferobjects.GL_COLOR_ATTACHMENT0_EXT,
                                          OpenGL.GL.GL_TEXTURE_2D,
                                          self.bfTex, 0)
 
-        glBindFramebuffer(GL_FRAMEBUFFER, 0)
+        OpenGL.GL.framebufferobjects.glBindFramebuffer(OpenGL.GL.framebufferobjects.GL_FRAMEBUFFER, 0)
 
         OpenGL.GL.glBindTexture(OpenGL.GL.GL_TEXTURE_2D, 0)
 
     def render_volume_obj(self, volume_object):
 
-        glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
+        OpenGL.GL.framebufferobjects.glBindFramebuffer(OpenGL.GL.framebufferobjects.GL_FRAMEBUFFER, self.fbo)
         OpenGL.GL.glViewport(0, 0, self.width, self.height)
         OpenGL.GL.glActiveTexture(OpenGL.GL.GL_TEXTURE0)
         OpenGL.GL.glBindTexture(OpenGL.GL.GL_TEXTURE_3D, volume_object.stack_texture)
@@ -344,7 +344,7 @@ class RenderWindow(object):
         glBindVertexArray( 0 )
         OpenGL.GL.shaders.glUseProgram(0)
 
-        glBindFramebuffer(GL_FRAMEBUFFER, 0)
+        OpenGL.GL.framebufferobjects.glBindFramebuffer(OpenGL.GL.framebufferobjects.GL_FRAMEBUFFER, 0)
 
         OpenGL.GL.glActiveTexture(OpenGL.GL.GL_TEXTURE0+1)
         OpenGL.GL.glBindTexture(OpenGL.GL.GL_TEXTURE_2D, self.bfTex)
