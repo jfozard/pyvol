@@ -59,7 +59,7 @@ class ShaderProgram(object):
         # check linking error
         result = OpenGL.GL.shaders.glGetProgramiv(program, OpenGL.GL.shaders.GL_LINK_STATUS)
         if not(result):
-            raise RuntimeError(glGetProgramInfoLog(program))
+            raise RuntimeError(OpenGL.GL.shaders.glGetProgramInfoLog(program))
         self.program = program
 
     def get_attrib(self, name):
