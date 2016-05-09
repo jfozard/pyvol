@@ -455,6 +455,8 @@ class RenderWindow(object):
             self.zoom *= 1.1
         elif k == '-':
             self.zoom *= 0.9
+        elif k == '\x1b':  # Quit on pressing ESC.
+            sys.exit(0)
         OpenGL.GLUT.glutPostRedisplay()
 
 
