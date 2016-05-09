@@ -228,7 +228,8 @@ class RenderWindow(object):
         OpenGL.GLUT.glutInitContextVersion(3, 2)
         OpenGL.GLUT.glutInitWindowSize(800, 600)
         OpenGL.GLUT.glutInitDisplayMode(OpenGL.GLUT.GLUT_RGBA
-                                        | OpenGL.GLUT.GLUT_DEPTH)
+                                        | OpenGL.GLUT.GLUT_DEPTH
+                                        | OpenGL.GLUT.GLUT_DOUBLE)
         self.window = OpenGL.GLUT.glutCreateWindow("Cell surface")
         self.width = 800
         self.height = 600
