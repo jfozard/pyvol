@@ -222,19 +222,31 @@ class VolumeObject(object):
         return stack_texture, s.shape
 
 
-class RenderWindow(object):
-    def __init__(self):
+class BaseWindow(object):
+
+    def __init__(self, title, width, height):
+        self.title = title
+        self.width = width
+        self.height = height
+        self.PMatrix = np.eye(4)
+        self.VMatrix = np.eye(4)
+        self.initialise_window()
+
+    def initialise_window(self):
+        """Subclasses need to implement this."""
+        raise(NotImplementedError())
+
+
+class RenderWindow(BaseWindow):
+
+    def initialise_window(self):
         OpenGL.GLUT.glutInit([])
         OpenGL.GLUT.glutInitContextVersion(3, 2)
-        OpenGL.GLUT.glutInitWindowSize(800, 600)
+        OpenGL.GLUT.glutInitWindowSize(self.width, self.height)
         OpenGL.GLUT.glutInitDisplayMode(OpenGL.GLUT.GLUT_RGBA
                                         | OpenGL.GLUT.GLUT_DEPTH
                                         | OpenGL.GLUT.GLUT_DOUBLE)
         self.window = OpenGL.GLUT.glutCreateWindow("Cell surface")
-        self.width = 800
-        self.height = 600
-        self.PMatrix = np.eye(4)
-        self.VMatrix = np.eye(4)
         self.volue_objects = []
         self.moving = False
         self.bfTex = None
@@ -461,7 +473,7 @@ class RenderWindow(object):
 
 
 def main():
-    r = RenderWindow()
+    r = RenderWindow("Cell surface", 800, 600)
     if len(sys.argv) >= 5:
         spacing = map(float, sys.argv[2:5])
     else:
