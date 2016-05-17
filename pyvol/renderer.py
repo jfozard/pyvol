@@ -414,14 +414,9 @@ class BaseGlutWindow(BaseWindow):
         self.key_bindings = {"+": self.zoom_in,
                              "-": self.zoom_out,
                              "\x1b": self.exit}
-
-    def initGL(self):
         self.ball = Arcball()
         self.zoom = 0.5
         self.dist = 2.0
-
-        self.volume_renderer = VolumeRenderer()
-        self.reshape(self.width, self.height)
 
     def zoom_in(self, x=None, y=None):
         self.zoom *= 1.1
@@ -456,8 +451,10 @@ class BaseGlutWindow(BaseWindow):
             OpenGL.GLUT.glutPostRedisplay()
 
     def start(self):
+        self._reshape(self.width, self.height)
+
         OpenGL.GLUT.glutDisplayFunc(self._draw)
-        OpenGL.GLUT.glutReshapeFunc(self.reshape)
+        OpenGL.GLUT.glutReshapeFunc(self._reshape)
         OpenGL.GLUT.glutKeyboardFunc(self.key)
         OpenGL.GLUT.glutMouseFunc(self.on_mouse_button)
         OpenGL.GLUT.glutMouseWheelFunc(self.on_mouse_button)
@@ -465,13 +462,13 @@ class BaseGlutWindow(BaseWindow):
 
         OpenGL.GLUT.glutMainLoop()
 
-    def reshape(self, width, height):
+    def _reshape(self, width, height):
         self.width = width
         self.height = height
         glViewport(0, 0, width, height)
         self.PMatrix = perspective(40.0, float(width)/height, 0.1, 10000.0)
         self.ball.place([width/2, height/2], height/2)
-        self.volume_renderer.init_back_texture(self.width, self.height)
+        self.reshape_hook()
         OpenGL.GLUT.glutPostRedisplay()
 
     def key(self, k, x, y):
@@ -487,19 +484,28 @@ class BaseGlutWindow(BaseWindow):
         view_mat = view_mat.dot(self.ball.matrix())
         view_mat = view_mat.dot(scale_matrix(self.zoom))
         self.VMatrix = view_mat
-        self.draw()
+        self.draw_hook()
         OpenGL.GLUT.glutSwapBuffers()
 
 
-    def draw(self):
+    def draw_hook(self):
+        raise(NotImplementedError())
+
+    def reshape_hook(self):
         raise(NotImplementedError())
 
 
 class ExampleVisualiser(BaseGlutWindow):
 
-    def draw(self):
+    def load_image(self, fpath, spacing):
+        self.volume_renderer = VolumeRenderer()
+        self.volume_renderer.make_volume_obj(fpath, spacing)
+
+    def draw_hook(self):
         self.volume_renderer.render(self.width, self.height, self.VMatrix, self.PMatrix)
 
+    def reshape_hook(self):
+        self.volume_renderer.init_back_texture(self.width, self.height)
 
 
 def main():
@@ -508,8 +514,7 @@ def main():
         spacing = map(float, sys.argv[2:5])
     else:
         spacing = (1.0, 1.0, 1.0)
-    r.initGL()
-    r.volume_renderer.make_volume_obj(sys.argv[1], spacing)
+    r.load_image(sys.argv[1], spacing)
     r.start()
 
 if __name__ == '__main__':
