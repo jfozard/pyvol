@@ -416,6 +416,14 @@ class BaseGlutWindow(BaseWindow):
         self.volume_renderer.make_volume_shaders()
         self.reshape(self.width, self.height)
 
+    def zoom_in(self):
+        self.zoom *= 1.1
+        OpenGL.GLUT.glutPostRedisplay()
+
+    def zoom_out(self):
+        self.zoom *= 0.9
+        OpenGL.GLUT.glutPostRedisplay()
+
     def on_multi_button(self, bid, x, y, s):
         pass
 
@@ -458,12 +466,11 @@ class BaseGlutWindow(BaseWindow):
 
     def key(self, k, x, y):
         if k == '+':
-            self.zoom *= 1.1
+            self.zoom_in()
         elif k == '-':
-            self.zoom *= 0.9
+            self.zoom_out()
         elif k == '\x1b':  # Quit on pressing ESC.
             sys.exit(0)
-        OpenGL.GLUT.glutPostRedisplay()
 
     def draw(self):
         raise(NotImplementedError())
