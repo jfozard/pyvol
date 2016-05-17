@@ -456,7 +456,7 @@ class BaseGlutWindow(BaseWindow):
             OpenGL.GLUT.glutPostRedisplay()
 
     def start(self):
-        OpenGL.GLUT.glutDisplayFunc(self.draw)
+        OpenGL.GLUT.glutDisplayFunc(self._draw)
         OpenGL.GLUT.glutReshapeFunc(self.reshape)
         OpenGL.GLUT.glutKeyboardFunc(self.key)
         OpenGL.GLUT.glutMouseFunc(self.on_mouse_button)
@@ -479,13 +479,7 @@ class BaseGlutWindow(BaseWindow):
             func = self.key_bindings[k]
             func(x, y)
 
-    def draw(self):
-        raise(NotImplementedError())
-
-
-class ExampleVisualiser(BaseGlutWindow):
-
-    def draw(self):
+    def _draw(self):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glClearColor(0.0, 0.0, 0.0, 1.0)
 
@@ -493,8 +487,18 @@ class ExampleVisualiser(BaseGlutWindow):
         view_mat = view_mat.dot(self.ball.matrix())
         view_mat = view_mat.dot(scale_matrix(self.zoom))
         self.VMatrix = view_mat
-        self.volume_renderer.render(self.width, self.height, self.VMatrix, self.PMatrix)
+        self.draw()
         OpenGL.GLUT.glutSwapBuffers()
+
+
+    def draw(self):
+        raise(NotImplementedError())
+
+
+class ExampleVisualiser(BaseGlutWindow):
+
+    def draw(self):
+        self.volume_renderer.render(self.width, self.height, self.VMatrix, self.PMatrix)
 
 
 
