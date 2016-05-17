@@ -228,8 +228,9 @@ class VolumeRenderer(object):
         self.bfTex = None
         self.fbo = None
         self.volume_objects = []
+        self._make_volume_shaders()
 
-    def make_volume_shaders(self):
+    def _make_volume_shaders(self):
 
         vertex = compile_vertex_shader_from_source("volumetric.vs")
         front_fragment = compile_fragment_shader_from_source("front.frag")
@@ -239,33 +240,7 @@ class VolumeRenderer(object):
         self.f_shader = ShaderProgram(vertex, front_fragment)
         self.volume_stride = 6 * 4
 
-    def make_volume_obj(self, fn, spacing):
-
-        self.volume_object = VolumeObject(fn, spacing)
-
-        glEnableVertexAttribArray(self.b_shader.get_attrib("position"))
-        glVertexAttribPointer(self.b_shader.get_attrib("position"),
-                              3,
-                              GL_FLOAT,
-                              False,
-                              self.volume_stride,
-                              self.volume_object.vtVBO)
-
-        glEnableVertexAttribArray(self.b_shader.get_attrib("texcoord"))
-        glVertexAttribPointer(
-            self.b_shader.get_attrib("texcoord"),
-            3, GL_FLOAT, False, self.volume_stride, self.volume_object.vtVBO+12
-            )
-
-        glBindVertexArray(0)
-        glDisableVertexAttribArray(self.b_shader.get_attrib("position"))
-        glDisableVertexAttribArray(self.b_shader.get_attrib("texcoord"))
-
-        glBindBuffer(GL_ARRAY_BUFFER, 0)
-
-        self.volume_objects.append(self.volume_object)
-
-    def render_volume_obj(self, volume_object, width, height, VMatrix, PMatrix):
+    def _render_volume_obj(self, volume_object, width, height, VMatrix, PMatrix):
 
         glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
         glViewport(0, 0, width, height)
@@ -338,6 +313,36 @@ class VolumeRenderer(object):
         volume_object.elVBO.unbind()
         glBindVertexArray(0)
         glUseProgram(0)
+
+    def render(self, width, height, VMatrix, PMatrix):
+        for volume_object in self.volume_objects:
+            self._render_volume_obj(volume_object, width, height, VMatrix, PMatrix)
+
+    def make_volume_obj(self, fn, spacing):
+
+        self.volume_object = VolumeObject(fn, spacing)
+
+        glEnableVertexAttribArray(self.b_shader.get_attrib("position"))
+        glVertexAttribPointer(self.b_shader.get_attrib("position"),
+                              3,
+                              GL_FLOAT,
+                              False,
+                              self.volume_stride,
+                              self.volume_object.vtVBO)
+
+        glEnableVertexAttribArray(self.b_shader.get_attrib("texcoord"))
+        glVertexAttribPointer(
+            self.b_shader.get_attrib("texcoord"),
+            3, GL_FLOAT, False, self.volume_stride, self.volume_object.vtVBO+12
+            )
+
+        glBindVertexArray(0)
+        glDisableVertexAttribArray(self.b_shader.get_attrib("position"))
+        glDisableVertexAttribArray(self.b_shader.get_attrib("texcoord"))
+
+        glBindBuffer(GL_ARRAY_BUFFER, 0)
+
+        self.volume_objects.append(self.volume_object)
 
     def init_back_texture(self, width, height):
 
@@ -416,7 +421,6 @@ class BaseGlutWindow(BaseWindow):
         self.dist = 2.0
 
         self.volume_renderer = VolumeRenderer()
-        self.volume_renderer.make_volume_shaders()
         self.reshape(self.width, self.height)
 
     def zoom_in(self, x=None, y=None):
@@ -489,8 +493,7 @@ class ExampleVisualiser(BaseGlutWindow):
         view_mat = view_mat.dot(self.ball.matrix())
         view_mat = view_mat.dot(scale_matrix(self.zoom))
         self.VMatrix = view_mat
-        for volume_object in self.volume_renderer.volume_objects:
-            self.volume_renderer.render_volume_obj(volume_object, self.width, self.height, self.VMatrix, self.PMatrix)
+        self.volume_renderer.render(self.width, self.height, self.VMatrix, self.PMatrix)
         OpenGL.GLUT.glutSwapBuffers()
 
 
