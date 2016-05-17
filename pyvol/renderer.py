@@ -395,7 +395,7 @@ class BaseWindow(object):
         raise(NotImplementedError())
 
 
-class RenderWindow(BaseWindow):
+class BaseGlutWindow(BaseWindow):
 
     def initialise_window(self):
         OpenGL.GLUT.glutInit([])
@@ -456,6 +456,21 @@ class RenderWindow(BaseWindow):
         self.volume_renderer.init_back_texture(self.width, self.height)
         OpenGL.GLUT.glutPostRedisplay()
 
+    def key(self, k, x, y):
+        if k == '+':
+            self.zoom *= 1.1
+        elif k == '-':
+            self.zoom *= 0.9
+        elif k == '\x1b':  # Quit on pressing ESC.
+            sys.exit(0)
+        OpenGL.GLUT.glutPostRedisplay()
+
+    def draw(self):
+        raise(NotImplementedError())
+
+
+class ExampleVisualiser(BaseGlutWindow):
+
     def draw(self):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glClearColor(0.0, 0.0, 0.0, 1.0)
@@ -468,18 +483,10 @@ class RenderWindow(BaseWindow):
             self.volume_renderer.render_volume_obj(volume_object, self.width, self.height, self.VMatrix, self.PMatrix)
         OpenGL.GLUT.glutSwapBuffers()
 
-    def key(self, k, x, y):
-        if k == '+':
-            self.zoom *= 1.1
-        elif k == '-':
-            self.zoom *= 0.9
-        elif k == '\x1b':  # Quit on pressing ESC.
-            sys.exit(0)
-        OpenGL.GLUT.glutPostRedisplay()
 
 
 def main():
-    r = RenderWindow("Cell surface", 800, 600)
+    r = ExampleVisualiser("Cell surface", 800, 600)
     if len(sys.argv) >= 5:
         spacing = map(float, sys.argv[2:5])
     else:
