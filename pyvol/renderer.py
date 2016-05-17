@@ -406,6 +406,9 @@ class BaseGlutWindow(BaseWindow):
                                         | OpenGL.GLUT.GLUT_DOUBLE)
         self.window = OpenGL.GLUT.glutCreateWindow("Cell surface")
         self.moving = False
+        self.key_bindings = {"+": self.zoom_in,
+                             "-": self.zoom_out,
+                             "\x1b": self.exit}
 
     def initGL(self):
         self.ball = Arcball()
@@ -416,13 +419,16 @@ class BaseGlutWindow(BaseWindow):
         self.volume_renderer.make_volume_shaders()
         self.reshape(self.width, self.height)
 
-    def zoom_in(self):
+    def zoom_in(self, x=None, y=None):
         self.zoom *= 1.1
         OpenGL.GLUT.glutPostRedisplay()
 
-    def zoom_out(self):
+    def zoom_out(self, x=None, y=None):
         self.zoom *= 0.9
         OpenGL.GLUT.glutPostRedisplay()
+
+    def exit(self, x=None, y=None):
+        sys.exit(0)
 
     def on_multi_button(self, bid, x, y, s):
         pass
@@ -465,12 +471,9 @@ class BaseGlutWindow(BaseWindow):
         OpenGL.GLUT.glutPostRedisplay()
 
     def key(self, k, x, y):
-        if k == '+':
-            self.zoom_in()
-        elif k == '-':
-            self.zoom_out()
-        elif k == '\x1b':  # Quit on pressing ESC.
-            sys.exit(0)
+        if k in self.key_bindings:
+            func = self.key_bindings[k]
+            func(x, y)
 
     def draw(self):
         raise(NotImplementedError())
