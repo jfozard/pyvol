@@ -76,6 +76,11 @@ from OpenGL.GL.ARB.vertex_array_object import (
     glGenVertexArrays,
     glBindVertexArray,
 )
+# The above does not work on MacOSX, so overwrite
+if sys.platform == "darwin":
+    from OpenGL.GL.APPLE.vertex_array_object import glGenVertexArraysAPPLE as glGenVertexArrays
+    from OpenGL.GL.APPLE.vertex_array_object import glBindVertexArrayAPPLE as glBindVertexArray
+
 from OpenGL.GL.ARB.texture_rg import (
     GL_R8,
     GL_UNSIGNED_BYTE,
