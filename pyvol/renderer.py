@@ -146,8 +146,8 @@ class ShaderProgram(object):
 
 class VolumeObject(object):
 
-    def __init__(self, fn, spacing):
-        self.stack_texture, shape = self.load_stack(fn)
+    def __init__(self, stack, spacing):
+        self.stack_texture, shape = self.load_stack(stack)
 
         self.vao = glGenVertexArrays(1)
         glBindVertexArray(self.vao)
@@ -194,12 +194,10 @@ class VolumeObject(object):
         print('made VBO')
         self.vtVBO.bind()
 
-    def load_stack(self, stack_fn):
-        data = open_tiff(stack_fn)
+    def load_stack(self, stack):
+        print('stack shape', stack.shape)
 
-        print('data shape', data.shape)
-
-        s = np.array(data, dtype=np.uint8, order='F')
+        s = np.array(stack, dtype=np.uint8, order='F')
 
         print(s.shape)
 
@@ -323,9 +321,9 @@ class VolumeRenderer(object):
         for volume_object in self.volume_objects:
             self._render_volume_obj(volume_object, width, height, VMatrix, PMatrix)
 
-    def make_volume_obj(self, fn, spacing):
+    def make_volume_obj(self, stack, spacing):
 
-        self.volume_object = VolumeObject(fn, spacing)
+        self.volume_object = VolumeObject(stack, spacing)
 
         glEnableVertexAttribArray(self.b_shader.get_attrib("position"))
         glVertexAttribPointer(self.b_shader.get_attrib("position"),
@@ -504,7 +502,8 @@ class ExampleVisualiser(BaseGlutWindow):
 
     def load_image(self, fpath, spacing):
         self.volume_renderer = VolumeRenderer()
-        self.volume_renderer.make_volume_obj(fpath, spacing)
+        stack = open_tiff(fpath)
+        self.volume_renderer.make_volume_obj(stack, spacing)
 
     def draw_hook(self):
         self.volume_renderer.render(self.width, self.height, self.VMatrix, self.PMatrix)
