@@ -323,7 +323,7 @@ class VolumeRenderer(object):
 
     def make_volume_obj(self, stack, spacing):
 
-        self.volume_object = VolumeObject(stack, spacing)
+        volume_object = VolumeObject(stack, spacing)
 
         glEnableVertexAttribArray(self.b_shader.get_attrib("position"))
         glVertexAttribPointer(self.b_shader.get_attrib("position"),
@@ -331,12 +331,12 @@ class VolumeRenderer(object):
                               GL_FLOAT,
                               False,
                               self.volume_stride,
-                              self.volume_object.vtVBO)
+                              volume_object.vtVBO)
 
         glEnableVertexAttribArray(self.b_shader.get_attrib("texcoord"))
         glVertexAttribPointer(
             self.b_shader.get_attrib("texcoord"),
-            3, GL_FLOAT, False, self.volume_stride, self.volume_object.vtVBO+12
+            3, GL_FLOAT, False, self.volume_stride, volume_object.vtVBO+12
             )
 
         glBindVertexArray(0)
@@ -345,7 +345,7 @@ class VolumeRenderer(object):
 
         glBindBuffer(GL_ARRAY_BUFFER, 0)
 
-        self.volume_objects.append(self.volume_object)
+        self.volume_objects.append(volume_object)
 
     def init_back_texture(self, width, height):
 
