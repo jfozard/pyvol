@@ -5,6 +5,9 @@ import numpy as np
 import numpy.linalg as la
 import math
 
+from mesh.GLmesh import GLMesh
+
+
 import OpenGL.GL
 from OpenGL.GL import (
     GL_ELEMENT_ARRAY_BUFFER,
@@ -22,6 +25,7 @@ from OpenGL.GL import (
     GL_RED,
     GL_ARRAY_BUFFER,
     GL_COLOR_BUFFER_BIT,
+    GL_DEPTH_TEST,
     GL_DEPTH_BUFFER_BIT,
     GL_RGBA,
     GL_RGBA16F,
@@ -171,7 +175,9 @@ class VolumeObject(object):
                             [0, 6, 2], [0, 4, 6],
                             [5, 6, 4], [5, 7, 6]],  # Triangle 10, triangle 11.
                            dtype=np.uint32)
+
         self.vtVBO = VBO(vb)
+        self.vtVBO.bind()
 
         sc = 1.0/la.norm(tl)
         c = 0.5*tl
@@ -186,9 +192,42 @@ class VolumeObject(object):
                                         ( 0.0, 0.0, 1.0/tl[2], 0.0),
                                         ( 0.0, 0.0, 0.0, 1.0) ))
 
+        glBindVertexArray(0)
+
         self.elVBO = VBO(idx_out, target=GL_ELEMENT_ARRAY_BUFFER)
         self.elCount = len(idx_out.flatten())
+
+
+
+class MeshObject(object):
+    def __init__(self, fn, spacing):
+
+        m = GLMesh()
+        self.mesh = m
+        sc = m.load_ply(fn)
+        v_out, n_out, col_out, idx_out = m.generate_arrays()
+
+        vb=np.concatenate((v_out,n_out,col_out),axis=1)
+        self.elVBO=VBO(idx_out, target=GL_ELEMENT_ARRAY_BUFFER)
+        self.elCount=len(idx_out.flatten())
+        
+        self.vao = glGenVertexArrays(1)
+
+
+        glBindVertexArray(self.vao)
+
+        self.vtVBO=VBO(vb)
+
         self.vtVBO.bind()
+
+        glBindVertexArray(0)
+
+        c = np.array((0,0,0))
+
+        self.transform = np.array(((sc, 0.0, 0.0, -sc*c[0]),
+                                   (0.0, sc, 0.0, -sc*c[1]),
+                                   (0.0, 0.0, sc, -sc*c[2]),
+                                   (0.0, 0.0, 0.0, 1.0)))
 
 
 class IsosurfaceVolumeRenderer(object):
@@ -291,8 +330,10 @@ class IsosurfaceVolumeRenderer(object):
 
     def make_volume_obj(self, fn, spacing):
 
-        self.volume_object = VolumeObject(fn, spacing)
-        self.volume_object.threshold = 15
+        volume_object = VolumeObject(fn, spacing)
+        volume_object.threshold = 15
+
+        glBindVertexArray(volume_object.vao)
 
         glEnableVertexAttribArray(self.b_shader.get_attrib("position"))
         glVertexAttribPointer(self.b_shader.get_attrib("position"),
@@ -300,21 +341,17 @@ class IsosurfaceVolumeRenderer(object):
                               GL_FLOAT,
                               False,
                               self.volume_stride,
-                              self.volume_object.vtVBO)
+                              volume_object.vtVBO)
 
         glEnableVertexAttribArray(self.b_shader.get_attrib("texcoord"))
         glVertexAttribPointer(
             self.b_shader.get_attrib("texcoord"),
-            3, GL_FLOAT, False, self.volume_stride, self.volume_object.vtVBO+12
+            3, GL_FLOAT, False, self.volume_stride, volume_object.vtVBO+12
             )
 
         glBindVertexArray(0)
-        glDisableVertexAttribArray(self.b_shader.get_attrib("position"))
-        glDisableVertexAttribArray(self.b_shader.get_attrib("texcoord"))
 
-        glBindBuffer(GL_ARRAY_BUFFER, 0)
-
-        self.volume_objects.append(self.volume_object)
+        self.volume_objects.append(volume_object)
 
     def init_back_texture(self, width, height):
 
@@ -351,6 +388,85 @@ class IsosurfaceVolumeRenderer(object):
 
         glBindTexture(GL_TEXTURE_2D, 0)
 
+
+class SolidRenderer(object):
+    def __init__(self):
+        self.solid_objects = []
+        self._make_solid_shaders()
+
+
+    def _make_solid_shaders(self):
+
+        vertex = compile_vertex_shader_from_source("solid_surface.vert")
+        fragment = compile_fragment_shader_from_source("solid_surface.frag")
+
+        self.shader = ShaderProgram(vertex, fragment)
+        self.stride = 9 * 4
+
+
+    def _render_solid_obj(self, solid_object, width, height, VMatrix, PMatrix):
+
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        glEnable(GL_CULL_FACE)
+        glEnable(GL_DEPTH_TEST)
+        glCullFace(GL_BACK)  
+
+        glUseProgram(self.shader.program)
+        glBindVertexArray(solid_object.vao)
+
+        solid_object.elVBO.bind()
+
+        mv_matrix = np.dot(VMatrix, solid_object.transform)
+        glUniformMatrix4fv(self.shader.get_uniform("mv_matrix"),
+                           1, True, mv_matrix.astype('float32'))
+        glUniformMatrix4fv(self.shader.get_uniform("p_matrix"),
+                           1, True, PMatrix.astype('float32'))
+
+        glDrawElements(GL_TRIANGLES, solid_object.elCount,
+                       GL_UNSIGNED_INT, solid_object.elVBO)
+
+        solid_object.elVBO.unbind()
+        glBindVertexArray(0)
+        glUseProgram(0)
+
+    def render(self, width, height, VMatrix, PMatrix):
+        for solid_object in self.solid_objects:
+            self._render_solid_obj(solid_object, width, height, VMatrix, PMatrix)
+
+    def make_solid_obj(self, fn, spacing):
+
+        mesh_object = MeshObject(fn, spacing)
+
+
+        glBindVertexArray(mesh_object.vao)
+
+
+
+        glEnableVertexAttribArray(self.shader.get_attrib("position"))
+        glVertexAttribPointer(self.shader.get_attrib("position"),
+                              3,
+                              GL_FLOAT,
+                              False,
+                              self.stride,
+                              mesh_object.vtVBO)
+
+        glEnableVertexAttribArray(self.shader.get_attrib("normal"))
+        glVertexAttribPointer(
+            self.shader.get_attrib("normal"),
+            3, GL_FLOAT, False, self.stride, mesh_object.vtVBO+12
+            )
+
+        glEnableVertexAttribArray(self.shader.get_attrib("color"))
+        glVertexAttribPointer(
+            self.shader.get_attrib("color"),
+            3, GL_FLOAT, False, self.stride, mesh_object.vtVBO+24
+            )
+
+        glBindVertexArray(0)
+
+        self.solid_objects.append(mesh_object)
+
+        
 
 class VolumeRenderer(object):
 
@@ -450,29 +566,25 @@ class VolumeRenderer(object):
 
     def make_volume_obj(self, fn, spacing):
 
-        self.volume_object = VolumeObject(fn, spacing)
+        volume_object = VolumeObject(fn, spacing)
 
+        glBindVertexArray(volume_object.vao)
         glEnableVertexAttribArray(self.b_shader.get_attrib("position"))
         glVertexAttribPointer(self.b_shader.get_attrib("position"),
                               3,
                               GL_FLOAT,
                               False,
                               self.volume_stride,
-                              self.volume_object.vtVBO)
+                              volume_object.vtVBO)
 
         glEnableVertexAttribArray(self.b_shader.get_attrib("texcoord"))
         glVertexAttribPointer(
             self.b_shader.get_attrib("texcoord"),
-            3, GL_FLOAT, False, self.volume_stride, self.volume_object.vtVBO+12
+            3, GL_FLOAT, False, self.volume_stride, volume_object.vtVBO+12
             )
 
         glBindVertexArray(0)
-        glDisableVertexAttribArray(self.b_shader.get_attrib("position"))
-        glDisableVertexAttribArray(self.b_shader.get_attrib("texcoord"))
-
-        glBindBuffer(GL_ARRAY_BUFFER, 0)
-
-        self.volume_objects.append(self.volume_object)
+        self.volume_objects.append(volume_object)
 
     def init_back_texture(self, width, height):
 
@@ -623,15 +735,15 @@ class BaseGlutWindow(BaseWindow):
 class ExampleVisualiser(BaseGlutWindow):
 
     def load_image(self, fpath, spacing):
-        self.volume_renderer = VolumeRenderer()
-        self.volume_renderer.make_volume_obj(fpath, spacing)
+        self.renderer = SolidRenderer()
+        self.renderer.make_solid_obj(fpath, spacing)
 
     def draw_hook(self):
-        self.volume_renderer.render(self.width, self.height, self.VMatrix, self.PMatrix)
+        self.renderer.render(self.width, self.height, self.VMatrix, self.PMatrix)
 
     def reshape_hook(self):
-        self.volume_renderer.init_back_texture(self.width, self.height)
-
+        #self.renderer.init_back_texture(self.width, self.height)
+        pass
 
 def main():
     r = ExampleVisualiser("Cell surface", 800, 600)
