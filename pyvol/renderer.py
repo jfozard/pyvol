@@ -26,6 +26,8 @@ from OpenGL.GL import (
     GL_FRONT,
     GL_TRIANGLES,
     GL_UNSIGNED_INT,
+    GL_UNSIGNED_BYTE,
+    GL_FLOAT,
     glGenTextures,
     glTexImage2D,
     glTexImage3D,
@@ -83,12 +85,10 @@ if sys.platform == "darwin":
 
 from OpenGL.GL.ARB.texture_rg import (
     GL_R8,
-    GL_UNSIGNED_BYTE,
-    GL_FLOAT,
 )
 
 from transformations import Arcball, translation_matrix, scale_matrix
-from tiff_parser import open_tiff
+from imageio.tiff_parser import open_tiff
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 SHADER_SOURCE_DIR = os.path.join(HERE, "shaders")
