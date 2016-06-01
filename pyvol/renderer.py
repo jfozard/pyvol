@@ -13,6 +13,10 @@ from OpenGL.GL import (
     GL_TEXTURE0,
     GL_TEXTURE_MIN_FILTER,
     GL_TEXTURE_MAG_FILTER,
+    GL_TEXTURE_WRAP_S,
+    GL_TEXTURE_WRAP_T,
+    GL_TEXTURE_WRAP_R,
+    GL_CLAMP_TO_EDGE,
     GL_LINEAR,
     GL_UNPACK_ALIGNMENT,
     GL_RED,
@@ -45,26 +49,19 @@ from OpenGL.GL import (
     glCullFace,
     glDrawElements,
 )
+
 import OpenGL.GLUT
 from OpenGL.GL.shaders import (
-    GL_VERTEX_SHADER,
-    GL_FRAGMENT_SHADER,
-    GL_LINK_STATUS,
-    compileShader,
-    glCreateProgram,
     glUseProgram,
-    glAttachShader,
-    glLinkProgram,
-    glGetProgramiv,
-    glGetProgramInfoLog,
-    glGetAttribLocation,
-    glGetUniformLocation,
     glVertexAttribPointer,
     glEnableVertexAttribArray,
     glDisableVertexAttribArray,
     glUniform1i,
+    glUniform1f,
     glUniformMatrix4fv,
 )
+
+
 from OpenGL.GL.framebufferobjects import (
     GL_FRAMEBUFFER,
     GL_FRAMEBUFFER_EXT,
@@ -87,6 +84,10 @@ from OpenGL.GL.ARB.texture_rg import (
     GL_R8,
 )
 
+
+from shaders.program import ShaderProgram, compile_vertex_shader_from_source, \
+                            compile_fragment_shader_from_source
+
 from transformations import Arcball, translation_matrix, scale_matrix
 from imageio.tiff_parser import open_tiff
 
@@ -104,50 +105,42 @@ def perspective(fovy, aspect, zNear, zFar):
                      (0, 0, -1, 0)))
 
 
-def _compile_shader_from_source(fname, shader_type):
-    """Return compiled shader; assumes fname is in shaders dir"""
-    with open(os.path.join(SHADER_SOURCE_DIR, fname)) as fh:
-        source = fh.read()
-    return compileShader(source, shader_type)
+class StackObject(object):
+    def __init__(self, fn, spacing):
 
+        data = open_tiff(fn)
 
-def compile_vertex_shader_from_source(fname):
-    """Return compiled vertex shader; assumes fname is in shaders dir"""
-    return _compile_shader_from_source(fname,
-                                       GL_VERTEX_SHADER)
+        s = np.array(data, dtype=np.uint8, order='F')
 
+        w, h, d = s.shape
+        stack_texture = glGenTextures(1)
 
-def compile_fragment_shader_from_source(fname):
-    """Return compiled fragment shader; assumes fname is in shaders dir"""
-    return _compile_shader_from_source(fname,
-                                       GL_FRAGMENT_SHADER)
+        glActiveTexture(GL_TEXTURE0)
+        glBindTexture(GL_TEXTURE_3D, stack_texture)
 
+        glTexParameter(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glTexParameter(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
 
-class ShaderProgram(object):
-    """OpenGL shader program."""
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
 
-    def __init__(self, vertex_shader, fragment_shader):
-        program = glCreateProgram()
-        glAttachShader(program, vertex_shader)
-        glAttachShader(program, fragment_shader)
-        glLinkProgram(program)
-        # check linking error
-        result = glGetProgramiv(program, GL_LINK_STATUS)
-        if not(result):
-            raise RuntimeError(glGetProgramInfoLog(program))
-        self.program = program
+        glTexParameter(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+        glTexParameter(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+        glTexParameter(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE)
 
-    def get_attrib(self, name):
-        return glGetAttribLocation(self.program, name)
+        glTexImage3D(GL_TEXTURE_3D, 0, GL_R8, d, h, w, 0, GL_RED,
+                     GL_UNSIGNED_BYTE, s)
 
-    def get_uniform(self, name):
-        return glGetUniformLocation(self.program, name)
+        self.stack_texture = stack_texture
+        self.shape = s.shape
 
 
 class VolumeObject(object):
 
     def __init__(self, fn, spacing):
-        self.stack_texture, shape = self.load_stack(fn)
+
+        self.stack_object = StackObject(fn, spacing)
+
+        shape = self.stack_object.shape
 
         self.vao = glGenVertexArrays(1)
         glBindVertexArray(self.vao)
@@ -188,43 +181,175 @@ class VolumeObject(object):
                                    (sc, 0.0, 0.0, -sc*c[0]),
                                    (0.0, 0.0, 0.0, 1.0)))
 
+        self.tex_transform = np.array( ((1.0/tl[0], 0.0, 0.0, 0.0),
+                                        ( 0.0, 1.0/tl[1], 0.0, 0.0),
+                                        ( 0.0, 0.0, 1.0/tl[2], 0.0),
+                                        ( 0.0, 0.0, 0.0, 1.0) ))
+
         self.elVBO = VBO(idx_out, target=GL_ELEMENT_ARRAY_BUFFER)
         self.elCount = len(idx_out.flatten())
-
-        print('made VBO')
         self.vtVBO.bind()
 
-    def load_stack(self, stack_fn):
-        data = open_tiff(stack_fn)
 
-        print('data shape', data.shape)
+class IsosurfaceVolumeRenderer(object):
 
-        s = np.array(data, dtype=np.uint8, order='F')
+    def __init__(self):
+        self.bfTex = None
+        self.fbo = None
+        self.volume_objects = []
+        self._make_volume_shaders()
 
-        print(s.shape)
+    def _make_volume_shaders(self):
 
-        w, h, d = s.shape
-        print('shape', s.shape)
+        vertex = compile_vertex_shader_from_source("volume.vert")
+        front_fragment = compile_fragment_shader_from_source("volume_iso_front.frag")
+        back_fragment = compile_fragment_shader_from_source("volume_back.frag")
 
-        stack_texture = glGenTextures(1)
-        print(stack_texture)
+        self.b_shader = ShaderProgram(vertex, back_fragment)
+        self.f_shader = ShaderProgram(vertex, front_fragment)
+        self.volume_stride = 6 * 4
+
+    def _render_volume_obj(self, volume_object, width, height, VMatrix, PMatrix):
+
+        glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
+        glViewport(0, 0, width, height)
+        glActiveTexture(GL_TEXTURE0)
+        glBindTexture(GL_TEXTURE_3D, volume_object.stack_object.stack_texture)
+
+        glClear(GL_COLOR_BUFFER_BIT)
+
+        glEnable(GL_CULL_FACE)
+
+        glCullFace(GL_BACK)  
+
+        glUseProgram(self.b_shader.program)
+
+        glBindVertexArray(volume_object.vao)
+
+        volume_object.elVBO.bind()
+
+        mv_matrix = np.dot(VMatrix, volume_object.transform)
+        glUniformMatrix4fv(self.b_shader.get_uniform("mv_matrix"),
+                           1, True, mv_matrix.astype('float32'))
+        glUniformMatrix4fv(self.b_shader.get_uniform("p_matrix"),
+                           1, True, PMatrix.astype('float32'))
+
+
+        glDrawElements(GL_TRIANGLES, volume_object.elCount,
+                       GL_UNSIGNED_INT, volume_object.elVBO)
+
+        volume_object.elVBO.unbind()
+        glBindVertexArray(0)
+        glUseProgram(0)
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0)
+
+        glActiveTexture(GL_TEXTURE0 + 1)
+        glBindTexture(GL_TEXTURE_2D, self.bfTex)
 
         glActiveTexture(GL_TEXTURE0)
-        glBindTexture(GL_TEXTURE_3D, stack_texture)
+        glBindTexture(GL_TEXTURE_3D, volume_object.stack_object.stack_texture)
 
-        glTexParameter(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-        glTexParameter(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        glUseProgram(self.f_shader.program)
 
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
+        glUniform1i(self.f_shader.get_uniform("texture3s"), 0)
+        glUniform1i(self.f_shader.get_uniform("backfaceTex"), 1)
 
-#       glTexParameter(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
-#       glTexParameter(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
-#       glTexParameter(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE)
+        tex_inv_matrix = np.dot(PMatrix, np.dot(mv_matrix, la.inv(volume_object.tex_transform)))
+        glUniformMatrix4fv(self.f_shader.get_uniform('tex_inv_matrix'), 1, True, tex_inv_matrix.astype('float32'))
 
-        glTexImage3D(GL_TEXTURE_3D, 0, GL_R8, d, h, w, 0, GL_RED,
-                     GL_UNSIGNED_BYTE, s)
-        print("made 3D texture")
-        return stack_texture, s.shape
+        glUniform1f(self.f_shader.get_uniform('isolevel'), volume_object.threshold/255.0)
+
+
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+
+        glEnable(GL_CULL_FACE)
+        glCullFace(GL_FRONT)
+
+        glBindVertexArray(volume_object.vao)
+        volume_object.elVBO.bind()
+
+        glUniformMatrix4fv(self.f_shader.get_uniform("mv_matrix"),
+                           1, True, mv_matrix.astype('float32'))
+        glUniformMatrix4fv(self.f_shader.get_uniform("p_matrix"),
+                           1, True, PMatrix.astype('float32'))
+
+        glDrawElements(GL_TRIANGLES, volume_object.elCount,
+                       GL_UNSIGNED_INT, volume_object.elVBO)
+
+        glActiveTexture(GL_TEXTURE0+1)
+        glBindTexture(GL_TEXTURE_2D, 0)
+
+        glCullFace(GL_BACK)
+        volume_object.elVBO.unbind()
+        glBindVertexArray(0)
+        glUseProgram(0)
+
+    def render(self, width, height, VMatrix, PMatrix):
+        for volume_object in self.volume_objects:
+            self._render_volume_obj(volume_object, width, height, VMatrix, PMatrix)
+
+    def make_volume_obj(self, fn, spacing):
+
+        self.volume_object = VolumeObject(fn, spacing)
+        self.volume_object.threshold = 15
+
+        glEnableVertexAttribArray(self.b_shader.get_attrib("position"))
+        glVertexAttribPointer(self.b_shader.get_attrib("position"),
+                              3,
+                              GL_FLOAT,
+                              False,
+                              self.volume_stride,
+                              self.volume_object.vtVBO)
+
+        glEnableVertexAttribArray(self.b_shader.get_attrib("texcoord"))
+        glVertexAttribPointer(
+            self.b_shader.get_attrib("texcoord"),
+            3, GL_FLOAT, False, self.volume_stride, self.volume_object.vtVBO+12
+            )
+
+        glBindVertexArray(0)
+        glDisableVertexAttribArray(self.b_shader.get_attrib("position"))
+        glDisableVertexAttribArray(self.b_shader.get_attrib("texcoord"))
+
+        glBindBuffer(GL_ARRAY_BUFFER, 0)
+
+        self.volume_objects.append(self.volume_object)
+
+    def init_back_texture(self, width, height):
+
+        if self.fbo is None:
+            self.fbo = glGenFramebuffers(1)
+
+        glActiveTexture(GL_TEXTURE0 + 1)
+
+        if self.bfTex is not None:
+            glDeleteTextures([self.bfTex])
+
+        self.bfTex = glGenTextures(1)
+
+        glBindTexture(GL_TEXTURE_2D, self.bfTex)
+
+        glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+
+
+        w = int(width)
+        h = int(height)
+
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0,
+                     GL_RGBA, GL_FLOAT, None)
+
+        glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
+
+        glFramebufferTexture2D(GL_FRAMEBUFFER_EXT,
+                               GL_COLOR_ATTACHMENT0_EXT,
+                               GL_TEXTURE_2D,
+                               self.bfTex, 0)
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0)
+
+        glBindTexture(GL_TEXTURE_2D, 0)
 
 
 class VolumeRenderer(object):
@@ -237,9 +362,9 @@ class VolumeRenderer(object):
 
     def _make_volume_shaders(self):
 
-        vertex = compile_vertex_shader_from_source("volumetric.vs")
-        front_fragment = compile_fragment_shader_from_source("front.frag")
-        back_fragment = compile_fragment_shader_from_source("back.frag")
+        vertex = compile_vertex_shader_from_source("volume.vert")
+        front_fragment = compile_fragment_shader_from_source("volume_front.frag")
+        back_fragment = compile_fragment_shader_from_source("volume_back.frag")
 
         self.b_shader = ShaderProgram(vertex, back_fragment)
         self.f_shader = ShaderProgram(vertex, front_fragment)
@@ -250,7 +375,7 @@ class VolumeRenderer(object):
         glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
         glViewport(0, 0, width, height)
         glActiveTexture(GL_TEXTURE0)
-        glBindTexture(GL_TEXTURE_3D, volume_object.stack_texture)
+        glBindTexture(GL_TEXTURE_3D, volume_object.stack_object.stack_texture)
 
         glClear(GL_COLOR_BUFFER_BIT)
 
@@ -266,7 +391,7 @@ class VolumeRenderer(object):
         glUseProgram(self.b_shader.program)
 
         glBindVertexArray(volume_object.vao)
-        print("copied", volume_object.elVBO.copied)
+
         volume_object.elVBO.bind()
 
         mv_matrix = np.dot(VMatrix, volume_object.transform)
@@ -288,7 +413,7 @@ class VolumeRenderer(object):
         glBindTexture(GL_TEXTURE_2D, self.bfTex)
 
         glActiveTexture(GL_TEXTURE0)
-        glBindTexture(GL_TEXTURE_3D, volume_object.stack_texture)
+        glBindTexture(GL_TEXTURE_3D, volume_object.stack_object.stack_texture)
 
         glUseProgram(self.f_shader.program)
 
@@ -353,7 +478,6 @@ class VolumeRenderer(object):
 
         if self.fbo is None:
             self.fbo = glGenFramebuffers(1)
-        print("fbo", self.fbo)
 
         glActiveTexture(GL_TEXTURE0 + 1)
 
@@ -362,21 +486,17 @@ class VolumeRenderer(object):
 
         self.bfTex = glGenTextures(1)
 
-        print("gen Tex 1")
         glBindTexture(GL_TEXTURE_2D, self.bfTex)
 
         glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
         glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
 
-        print("bound", self.bfTex)
 
-        print(width, height)
         w = int(width)
         h = int(height)
 
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0,
                      GL_RGBA, GL_FLOAT, None)
-        print("made texture img")
 
         glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
 
