@@ -50,6 +50,7 @@ from OpenGL.GL import (
     glDeleteTextures,
     glFramebufferTexture2D,
     glEnable,
+    glDisable,
     glCullFace,
     glDrawElements,
     glPolygonMode,
@@ -421,6 +422,7 @@ class SolidRenderer(object):
         glUniformMatrix4fv(self.shader.get_uniform("p_matrix"),
                            1, True, PMatrix.astype('float32'))
 
+        glDisable(GL_CULL_FACE)
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
 #       glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
         glDrawElements(GL_TRIANGLES, solid_object.elCount,
@@ -466,7 +468,6 @@ class SolidRenderer(object):
         glBindVertexArray(0)
 
         self.solid_objects.append(mesh_object)
-
 
 
 class VolumeRenderer(object):
@@ -619,6 +620,19 @@ class VolumeRenderer(object):
         glBindFramebuffer(GL_FRAMEBUFFER, 0)
 
         glBindTexture(GL_TEXTURE_2D, 0)
+
+
+class CompositeRenderer(VolumeRenderer, SolidRenderer):
+
+    def __init__(self):
+        VolumeRenderer.__init__(self)
+        SolidRenderer.__init__(self)
+
+    def render(self, width, height, VMatrix, PMatrix):
+        for solid_object in self.solid_objects:
+            self._render_solid_obj(solid_object, width, height, VMatrix, PMatrix)
+        for volume_object in self.volume_objects:
+            self._render_volume_obj(volume_object, width, height, VMatrix, PMatrix)
 
 
 class BaseWindow(object):
