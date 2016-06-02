@@ -210,7 +210,7 @@ class MeshObject(object):
         vb=np.concatenate((v_out,n_out,col_out),axis=1)
         self.elVBO=VBO(idx_out, target=GL_ELEMENT_ARRAY_BUFFER)
         self.elCount=len(idx_out.flatten())
-        
+
         self.vao = glGenVertexArrays(1)
 
 
@@ -259,7 +259,7 @@ class IsosurfaceVolumeRenderer(object):
 
         glEnable(GL_CULL_FACE)
 
-        glCullFace(GL_BACK)  
+        glCullFace(GL_BACK)
 
         glUseProgram(self.b_shader.program)
 
@@ -409,7 +409,7 @@ class SolidRenderer(object):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glEnable(GL_CULL_FACE)
         glEnable(GL_DEPTH_TEST)
-        glCullFace(GL_BACK)  
+        glCullFace(GL_BACK)
 
         glUseProgram(self.shader.program)
         glBindVertexArray(solid_object.vao)
@@ -466,7 +466,7 @@ class SolidRenderer(object):
 
         self.solid_objects.append(mesh_object)
 
-        
+
 
 class VolumeRenderer(object):
 
@@ -730,29 +730,3 @@ class BaseGlutWindow(BaseWindow):
 
     def reshape_hook(self):
         raise(NotImplementedError())
-
-
-class ExampleVisualiser(BaseGlutWindow):
-
-    def load_image(self, fpath, spacing):
-        self.renderer = SolidRenderer()
-        self.renderer.make_solid_obj(fpath, spacing)
-
-    def draw_hook(self):
-        self.renderer.render(self.width, self.height, self.VMatrix, self.PMatrix)
-
-    def reshape_hook(self):
-        #self.renderer.init_back_texture(self.width, self.height)
-        pass
-
-def main():
-    r = ExampleVisualiser("Cell surface", 800, 600)
-    if len(sys.argv) >= 5:
-        spacing = map(float, sys.argv[2:5])
-    else:
-        spacing = (1.0, 1.0, 1.0)
-    r.load_image(sys.argv[1], spacing)
-    r.start()
-
-if __name__ == '__main__':
-    main()
