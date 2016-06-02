@@ -52,6 +52,10 @@ from OpenGL.GL import (
     glEnable,
     glCullFace,
     glDrawElements,
+    glPolygonMode,
+    GL_FRONT_AND_BACK,
+    GL_FILL,
+    GL_LINE,
 )
 
 import OpenGL.GLUT
@@ -404,9 +408,7 @@ class SolidRenderer(object):
 
     def _render_solid_obj(self, solid_object, width, height, VMatrix, PMatrix):
 
-        glEnable(GL_CULL_FACE)
         glEnable(GL_DEPTH_TEST)
-        glCullFace(GL_BACK)
 
         glUseProgram(self.shader.program)
         glBindVertexArray(solid_object.vao)
@@ -419,6 +421,8 @@ class SolidRenderer(object):
         glUniformMatrix4fv(self.shader.get_uniform("p_matrix"),
                            1, True, PMatrix.astype('float32'))
 
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
+#       glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
         glDrawElements(GL_TRIANGLES, solid_object.elCount,
                        GL_UNSIGNED_INT, solid_object.elVBO)
 
