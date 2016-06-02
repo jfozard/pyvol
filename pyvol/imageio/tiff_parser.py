@@ -17,7 +17,8 @@ def open_tiff(fn):
     except EOFError:
         pass
 
-    im = np.dstack(frames)
+    im = np.array(frames)
+    print 'shape', im.shape
     del frames
     return im
 
