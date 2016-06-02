@@ -255,7 +255,7 @@ class IsosurfaceVolumeRenderer(object):
         glActiveTexture(GL_TEXTURE0)
         glBindTexture(GL_TEXTURE_3D, volume_object.stack_object.stack_texture)
 
-        glClear(GL_COLOR_BUFFER_BIT)
+        glClear(GL_COLOR_BUFFER_BIT)  # Clear back buffer.
 
         glEnable(GL_CULL_FACE)
 
@@ -299,8 +299,6 @@ class IsosurfaceVolumeRenderer(object):
 
         glUniform1f(self.f_shader.get_uniform('isolevel'), volume_object.threshold/255.0)
 
-
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
         glEnable(GL_CULL_FACE)
         glCullFace(GL_FRONT)
@@ -406,7 +404,6 @@ class SolidRenderer(object):
 
     def _render_solid_obj(self, solid_object, width, height, VMatrix, PMatrix):
 
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glEnable(GL_CULL_FACE)
         glEnable(GL_DEPTH_TEST)
         glCullFace(GL_BACK)
@@ -493,7 +490,7 @@ class VolumeRenderer(object):
         glActiveTexture(GL_TEXTURE0)
         glBindTexture(GL_TEXTURE_3D, volume_object.stack_object.stack_texture)
 
-        glClear(GL_COLOR_BUFFER_BIT)
+        glClear(GL_COLOR_BUFFER_BIT)  # Clear back buffer.
 
         glEnable(GL_CULL_FACE)
 
@@ -535,8 +532,6 @@ class VolumeRenderer(object):
 
         glUniform1i(self.f_shader.get_uniform("texture3s"), 0)
         glUniform1i(self.f_shader.get_uniform("backfaceTex"), 1)
-
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
         glEnable(GL_CULL_FACE)
         glCullFace(GL_FRONT)
