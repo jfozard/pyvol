@@ -5,6 +5,12 @@ import numpy as np
 import numpy.linalg as la
 import math
 import logging
+import warnings
+
+
+# Suppress UserWarning from external.transform module
+warnings.filterwarnings("ignore", module="external.transform", lineno=1833)
+
 
 from mesh.GLmesh import GLMesh
 
