@@ -4,6 +4,7 @@ import os.path
 import numpy as np
 import numpy.linalg as la
 import math
+import logging
 
 from mesh.GLmesh import GLMesh
 
@@ -502,9 +503,9 @@ class VolumeRenderer(object):
         glCullFace(GL_BACK)  # NB flipped
 
 #        glValidateProgram(self.b_shader.program)
-#        print("b_valid ", glGetProgramiv(self.b_shader.program,
+#        logging.debug("b_valid ", glGetProgramiv(self.b_shader.program,
 #                                         GL_VALIDATE_STATUS))
-#        print(glGetProgramInfoLog(self.b_shader.program).decode())
+#        logging.debug(glGetProgramInfoLog(self.b_shader.program).decode())
 
         glUseProgram(self.b_shader.program)
 

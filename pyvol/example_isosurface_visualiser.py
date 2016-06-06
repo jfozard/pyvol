@@ -1,6 +1,8 @@
 """Example isosurface visualiser."""
 
 import sys
+import logging
+
 from renderer import BaseGlutWindow, IsosurfaceVolumeRenderer
 
 class ExampleIsosurfaceVisualiser(BaseGlutWindow):
@@ -17,6 +19,7 @@ class ExampleIsosurfaceVisualiser(BaseGlutWindow):
         pass
 
 def main():
+    logging.basicConfig(level=logging.DEBUG)
     r = ExampleIsosurfaceVisualiser("Example Isosurface Visualiser", 800, 600)
     if len(sys.argv) >= 5:
         spacing = map(float, sys.argv[2:5])

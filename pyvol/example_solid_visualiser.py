@@ -1,6 +1,8 @@
 """Example solid visualiser."""
 
 import sys
+import logging
+
 from renderer import BaseGlutWindow, SolidRenderer
 
 class ExampleSolidVisualiser(BaseGlutWindow):
@@ -17,6 +19,7 @@ class ExampleSolidVisualiser(BaseGlutWindow):
         pass
 
 def main():
+    logging.basicConfig(level=logging.DEBUG)
     r = ExampleSolidVisualiser("Example Solid Visualiser", 800, 600)
     if len(sys.argv) >= 5:
         spacing = map(float, sys.argv[2:5])

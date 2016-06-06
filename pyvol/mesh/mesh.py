@@ -1,4 +1,4 @@
-
+import logging
 
 import numpy as np
 
@@ -25,15 +25,15 @@ class Mesh(object):
     def load_ply(self, fn):
         descr, data = parse_ply(fn)
 
-        print descr
+        logging.debug( descr )
 
         NV = len(data['vertex'][0])
         NF = len(data['face'][0])
-        print 'NF', NF
+        logging.debug( 'NF {}'.format(NF) )
 
         verts = []
 
-        print data['vertex'][1]
+        logging.debug( data['vertex'][1] )
         x_idx = data['vertex'][1].index('x')
         y_idx = data['vertex'][1].index('y')
         z_idx = data['vertex'][1].index('z')
@@ -86,7 +86,7 @@ class Mesh(object):
             if has_color:
                 vert_color.append(np.array((v[r_idx], v[g_idx], v[b_idx])))
 
-        print 'done_vertex'
+        logging.debug( 'done_vertex' )
 
         self.verts = np.array(verts)
 
@@ -104,7 +104,7 @@ class Mesh(object):
         if has_normal:
             self.vert_props['normal'] = np.array(vert_norm)
         else:
-            print 'Calculate surface normals'
+            logging.debug( 'Calculate surface normals' )
             # Area weighted surface normals (would prefer angle-weighted)
             self.vert_props['normal'] = calculate_vertex_normals(self.verts, self.tris)
 
@@ -187,9 +187,9 @@ class Mesh(object):
         data = { 'vertex': (v_data, vp_list),
                  'face': (f_data, fp_list) }
 
-        print 'write_ply', filename
+        logging.debug( 'write_ply', filename )
         write_ply(filename, descr, data)
-        print 'write_ply_done'
+        logging.debug( 'write_ply_done' )
 
 
 
