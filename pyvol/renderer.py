@@ -4,7 +4,6 @@ import os.path
 import numpy as np
 import numpy.linalg as la
 import math
-import logging
 import warnings
 
 
@@ -30,7 +29,6 @@ from OpenGL.GL import (
     GL_LINEAR,
     GL_UNPACK_ALIGNMENT,
     GL_RED,
-    GL_ARRAY_BUFFER,
     GL_COLOR_BUFFER_BIT,
     GL_DEPTH_TEST,
     GL_DEPTH_BUFFER_BIT,
@@ -49,7 +47,6 @@ from OpenGL.GL import (
     glTexParameter,
     glActiveTexture,
     glBindTexture,
-    glBindBuffer,
     glPixelStorei,
     glViewport,
     glClear,
@@ -71,7 +68,6 @@ from OpenGL.GL.shaders import (
     glUseProgram,
     glVertexAttribPointer,
     glEnableVertexAttribArray,
-    glDisableVertexAttribArray,
     glUniform1i,
     glUniform1f,
     glUniformMatrix4fv,
@@ -93,8 +89,10 @@ from OpenGL.GL.ARB.vertex_array_object import (
 )
 # The above does not work on MacOSX, so overwrite
 if sys.platform == "darwin":
-    from OpenGL.GL.APPLE.vertex_array_object import glGenVertexArraysAPPLE as glGenVertexArrays
-    from OpenGL.GL.APPLE.vertex_array_object import glBindVertexArrayAPPLE as glBindVertexArray
+    from OpenGL.GL.APPLE.vertex_array_object import glGenVertexArraysAPPLE  \
+                                                    as glGenVertexArrays
+    from OpenGL.GL.APPLE.vertex_array_object import glBindVertexArrayAPPLE  \
+                                                    as glBindVertexArray
 
 from OpenGL.GL.ARB.texture_rg import (
     GL_R8,
@@ -199,10 +197,10 @@ class VolumeObject(object):
                                    (sc, 0.0, 0.0, -sc*c[0]),
                                    (0.0, 0.0, 0.0, 1.0)))
 
-        self.tex_transform = np.array( ((1.0/tl[0], 0.0, 0.0, 0.0),
-                                        ( 0.0, 1.0/tl[1], 0.0, 0.0),
-                                        ( 0.0, 0.0, 1.0/tl[2], 0.0),
-                                        ( 0.0, 0.0, 0.0, 1.0) ))
+        self.tex_transform = np.array(((1.0/tl[0], 0.0, 0.0, 0.0),
+                                       (0.0, 1.0/tl[1], 0.0, 0.0),
+                                       (0.0, 0.0, 1.0/tl[2], 0.0),
+                                       (0.0, 0.0, 0.0, 1.0)))
 
         glBindVertexArray(0)
 
@@ -210,31 +208,28 @@ class VolumeObject(object):
         self.elCount = len(idx_out.flatten())
 
 
-
 class MeshObject(object):
     def __init__(self, fn, spacing):
-
         m = GLMesh()
         self.mesh = m
         sc = m.load_ply(fn)
         v_out, n_out, col_out, idx_out = m.generate_arrays()
 
-        vb=np.concatenate((v_out,n_out,col_out),axis=1)
-        self.elVBO=VBO(idx_out, target=GL_ELEMENT_ARRAY_BUFFER)
-        self.elCount=len(idx_out.flatten())
+        vb = np.concatenate((v_out, n_out, col_out), axis=1)
+        self.elVBO = VBO(idx_out, target=GL_ELEMENT_ARRAY_BUFFER)
+        self.elCount = len(idx_out.flatten())
 
         self.vao = glGenVertexArrays(1)
 
-
         glBindVertexArray(self.vao)
 
-        self.vtVBO=VBO(vb)
+        self.vtVBO = VBO(vb)
 
         self.vtVBO.bind()
 
         glBindVertexArray(0)
 
-        c = np.array((0,0,0))
+        c = np.array((0, 0, 0))
 
         self.transform = np.array(((sc, 0.0, 0.0, -sc*c[0]),
                                    (0.0, sc, 0.0, -sc*c[1]),
@@ -285,7 +280,6 @@ class IsosurfaceVolumeRenderer(object):
         glUniformMatrix4fv(self.b_shader.get_uniform("p_matrix"),
                            1, True, PMatrix.astype('float32'))
 
-
         glDrawElements(GL_TRIANGLES, volume_object.elCount,
                        GL_UNSIGNED_INT, volume_object.elVBO)
 
@@ -306,11 +300,16 @@ class IsosurfaceVolumeRenderer(object):
         glUniform1i(self.f_shader.get_uniform("texture3s"), 0)
         glUniform1i(self.f_shader.get_uniform("backfaceTex"), 1)
 
-        tex_inv_matrix = np.dot(PMatrix, np.dot(mv_matrix, la.inv(volume_object.tex_transform)))
-        glUniformMatrix4fv(self.f_shader.get_uniform('tex_inv_matrix'), 1, True, tex_inv_matrix.astype('float32'))
+        tex_inv_matrix = np.dot(PMatrix,
+                                np.dot(mv_matrix,
+                                       la.inv(volume_object.tex_transform)))
+        glUniformMatrix4fv(self.f_shader.get_uniform('tex_inv_matrix'),
+                           1,
+                           True,
+                           tex_inv_matrix.astype('float32'))
 
-        glUniform1f(self.f_shader.get_uniform('isolevel'), volume_object.threshold/255.0)
-
+        glUniform1f(self.f_shader.get_uniform('isolevel'),
+                    volume_object.threshold/255.0)
 
         glEnable(GL_CULL_FACE)
         glCullFace(GL_FRONT)
@@ -400,10 +399,10 @@ class IsosurfaceVolumeRenderer(object):
 
 
 class SolidRenderer(object):
+
     def __init__(self):
         self.solid_objects = []
         self._make_solid_shaders()
-
 
     def _make_solid_shaders(self):
 
@@ -412,7 +411,6 @@ class SolidRenderer(object):
 
         self.shader = ShaderProgram(vertex, fragment)
         self.stride = 9 * 4
-
 
     def _render_solid_obj(self, solid_object, width, height, VMatrix, PMatrix):
 
@@ -447,10 +445,7 @@ class SolidRenderer(object):
 
         mesh_object = MeshObject(fn, spacing)
 
-
         glBindVertexArray(mesh_object.vao)
-
-
 
         glEnableVertexAttribArray(self.shader.get_attrib("position"))
         glVertexAttribPointer(self.shader.get_attrib("position"),
@@ -610,7 +605,6 @@ class VolumeRenderer(object):
         glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
         glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
 
-
         w = int(width)
         h = int(height)
 
@@ -743,7 +737,6 @@ class BaseGlutWindow(BaseWindow):
         self.VMatrix = view_mat
         self.draw_hook()
         OpenGL.GLUT.glutSwapBuffers()
-
 
     def draw_hook(self):
         raise(NotImplementedError())
