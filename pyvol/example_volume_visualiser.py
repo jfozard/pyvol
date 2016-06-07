@@ -1,9 +1,11 @@
 """Example volume visualiser."""
 
 import sys
+import logging
+
 from renderer import BaseGlutWindow, VolumeRenderer
 
-from imageio.tiff_parser import open_tiff
+from io.tiff_parser import open_tiff
 
 class ExampleVolumeVisualiser(BaseGlutWindow):
 
@@ -20,6 +22,7 @@ class ExampleVolumeVisualiser(BaseGlutWindow):
         pass
 
 def main():
+    logging.basicConfig(level=logging.DEBUG)
     r = ExampleVolumeVisualiser("Example Volume Visualiser", 800, 600)
     if len(sys.argv) >= 5:
         spacing = map(float, sys.argv[2:5])

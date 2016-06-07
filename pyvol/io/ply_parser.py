@@ -1,8 +1,9 @@
-
 """
 Very simple functions to help with reading and writing
 ASCII format PLY files
 """
+
+import logging
 
 def parse_ply(filename):
     f = open(filename, 'r')
@@ -16,7 +17,7 @@ def parse_ply(filename):
         raise RuntimeError('File not in ascii format')
     l = f.readline()
     while l.split()[0]=='comment':
-        print l[l.index(' ')+1:]
+        logging.debug( l[l.index(' ')+1:] )
         l = f.readline()
     element_list = []
     while l.strip()!='end_header':
@@ -61,9 +62,9 @@ def parse_ply(filename):
                 el_data.append(prop_data)
             eltype_data.append(tuple(el_data))
         data[eltype_name] = (eltype_data, [x[0] for x in el[2]])
-    print data['face'][-1]
+    logging.debug( data['face'][-1] )
 
-    print 'done_parse'
+    logging.debug( 'done_parse' )
     return element_list, data
 
 

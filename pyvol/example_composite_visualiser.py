@@ -1,9 +1,11 @@
 """Example composite visualiser."""
 
 import sys
+import logging
+
 from renderer import BaseGlutWindow, CompositeRenderer
 
-from imageio.tiff_parser import open_tiff
+from io.tiff_parser import open_tiff
 
 class ExampleCompositeVisualiser(BaseGlutWindow):
 
@@ -23,6 +25,7 @@ class ExampleCompositeVisualiser(BaseGlutWindow):
         self.renderer.init_back_texture(self.width, self.height)
 
 def main():
+    logging.basicConfig(level=logging.DEBUG)
     r = ExampleCompositeVisualiser("Example Composite Visualiser", 800, 600)
     if len(sys.argv) >= 5:
         spacing = map(float, sys.argv[2:5])

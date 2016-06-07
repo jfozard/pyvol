@@ -1,3 +1,4 @@
+import logging
 
 import numpy as np
 import scipy.linalg as la
@@ -17,7 +18,7 @@ class GLMesh(Mesh):
         bbox=(np.min(v_array,0),  np.max(v_array,0) )
         v_array=v_array-0.5*(bbox[0] + bbox[1])
         bbox=(np.min(v_array,0),  np.max(v_array,0) )
-        
+
         self.v_array = v_array.astype(np.float32)
         self.bbox = bbox
         self.zoom=1.0/la.norm(bbox[1])
@@ -25,20 +26,20 @@ class GLMesh(Mesh):
         self.tri_array = np.array(self.tris, dtype=np.uint32)
         self.n_array = self.vert_props['normal'].astype(np.float32)
 
-        print 'done matrix', self.zoom
+        logging.debug( 'done matrix {}'.format(self.zoom) )
         return self.zoom
 
 
     def generate_arrays(self):
 
         tris = []
-        v_out = self.v_array 
+        v_out = self.v_array
         idx_out = self.tri_array
         n_out = self.n_array
 
         if 'color' in self.vert_props:
             col_out = (self.vert_props['color']/255.0).astype(np.float32)
-            print col_out
+            logging.debug( col_out )
         elif 'signal' in self.vert_props:
             signal = self.vert_props['signal']
 
@@ -48,12 +49,3 @@ class GLMesh(Mesh):
         else:
             col_out = (0.5*np.ones(v_out.shape)).astype(np.float32)
         return v_out, n_out, col_out, idx_out
-
-
-
-
-    
-            
-
-
-        

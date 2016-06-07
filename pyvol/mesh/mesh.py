@@ -1,8 +1,8 @@
-
+import logging
 
 import numpy as np
 
-from ply_parser import *
+from io.ply_parser import parse_ply, write_ply
 from algo import *
 
 
@@ -15,25 +15,25 @@ class Mesh(object):
     def __init__(self):
         # List of vertex positions
         self.verts = np.zeros((0,3), dtype=float)
-        # List of triangle vertex indices                 
+        # List of triangle vertex indices
         self.tris = np.zeros((0,3), dtype=int)
         # Dictionary of arrays - per vertex properties
-        self.vert_props = {}            
+        self.vert_props = {}
         # Dictionary of arrays - per face properties
-        self.tri_props = {}             
+        self.tri_props = {}
 
     def load_ply(self, fn):
         descr, data = parse_ply(fn)
-        
-        print descr
+
+        logging.debug( descr )
 
         NV = len(data['vertex'][0])
         NF = len(data['face'][0])
-        print 'NF', NF
+        logging.debug( 'NF {}'.format(NF) )
 
         verts = []
 
-        print data['vertex'][1]
+        logging.debug( data['vertex'][1] )
         x_idx = data['vertex'][1].index('x')
         y_idx = data['vertex'][1].index('y')
         z_idx = data['vertex'][1].index('z')
@@ -54,7 +54,7 @@ class Mesh(object):
             vert_signal = []
         else:
             has_signal = False
-        
+
         if 'red' in data['vertex'][1]:
             r_idx = data['vertex'][1].index('red')
             b_idx = data['vertex'][1].index('blue')
@@ -85,8 +85,8 @@ class Mesh(object):
                 vert_signal.append(v[s_idx])
             if has_color:
                 vert_color.append(np.array((v[r_idx], v[g_idx], v[b_idx])))
- 
-        print 'done_vertex'
+
+        logging.debug( 'done_vertex' )
 
         self.verts = np.array(verts)
 
@@ -104,10 +104,10 @@ class Mesh(object):
         if has_normal:
             self.vert_props['normal'] = np.array(vert_norm)
         else:
-            print 'Calculate surface normals'
+            logging.debug( 'Calculate surface normals' )
             # Area weighted surface normals (would prefer angle-weighted)
             self.vert_props['normal'] = calculate_vertex_normals(self.verts, self.tris)
-        
+
         if has_signal:
             self.vert_props['signal'] = np.array(vert_signal)
 
@@ -123,14 +123,14 @@ class Mesh(object):
         descr = [('vertex', None, [('x', ['float']),
                                    ('y', ['float']),
                                    ('z', ['float'])]),
-                 ('face', None, [('vertex_index', 
+                 ('face', None, [('vertex_index',
                                   ['list', 'int', 'int'])])]
 
         vp_list = ['x', 'y', 'z']
         fp_list = ['vertex_index']
         v_data = []
         f_data = []
-        
+
         if 'normal' in self.vert_props:
             descr[0][2].extend([('nx', ['float']),
                                 ('ny', ['float']),
@@ -140,7 +140,7 @@ class Mesh(object):
             has_normal = True
         else:
             has_normal = False
-        
+
         if 'color' in self.vert_props:
             descr[0][2].extend([('red', ['uchar']),
                                 ('green', ['uchar']),
@@ -187,12 +187,12 @@ class Mesh(object):
         data = { 'vertex': (v_data, vp_list),
                  'face': (f_data, fp_list) }
 
-        print 'write_ply', filename
+        logging.debug( 'write_ply', filename )
         write_ply(filename, descr, data)
-        print 'write_ply_done'
+        logging.debug( 'write_ply_done' )
 
 
-            
 
 
-        
+
+
