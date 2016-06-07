@@ -121,9 +121,7 @@ def perspective(fovy, aspect, zNear, zFar):
 
 class StackObject(object):
     def __init__(self, fn, spacing):
-
         data = open_tiff(fn)
-
         s = np.array(data, dtype=np.uint8, order='F')
 
         w, h, d = s.shape
@@ -151,9 +149,7 @@ class StackObject(object):
 class VolumeObject(object):
 
     def __init__(self, fn, spacing):
-
         self.stack_object = StackObject(fn, spacing)
-
         shape = self.stack_object.shape
 
         self.vao = glGenVertexArrays(1)
@@ -220,17 +216,13 @@ class MeshObject(object):
         self.elCount = len(idx_out.flatten())
 
         self.vao = glGenVertexArrays(1)
-
         glBindVertexArray(self.vao)
-
         self.vtVBO = VBO(vb)
-
         self.vtVBO.bind()
 
         glBindVertexArray(0)
 
         c = np.array((0, 0, 0))
-
         self.transform = np.array(((sc, 0.0, 0.0, -sc*c[0]),
                                    (0.0, sc, 0.0, -sc*c[1]),
                                    (0.0, 0.0, sc, -sc*c[2]),
@@ -265,13 +257,11 @@ class IsosurfaceVolumeRenderer(object):
         glClear(GL_COLOR_BUFFER_BIT)  # Clear back buffer.
 
         glEnable(GL_CULL_FACE)
-
         glCullFace(GL_BACK)
 
         glUseProgram(self.b_shader.program)
 
         glBindVertexArray(volume_object.vao)
-
         volume_object.elVBO.bind()
 
         mv_matrix = np.dot(VMatrix, volume_object.transform)
@@ -379,7 +369,6 @@ class IsosurfaceVolumeRenderer(object):
         glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
         glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
 
-
         w = int(width)
         h = int(height)
 
@@ -444,7 +433,6 @@ class SolidRenderer(object):
     def make_solid_obj(self, fn, spacing):
 
         mesh_object = MeshObject(fn, spacing)
-
         glBindVertexArray(mesh_object.vao)
 
         glEnableVertexAttribArray(self.shader.get_attrib("position"))
@@ -500,7 +488,6 @@ class VolumeRenderer(object):
         glClear(GL_COLOR_BUFFER_BIT)  # Clear back buffer.
 
         glEnable(GL_CULL_FACE)
-
         glCullFace(GL_BACK)  # NB flipped
 
 #        glValidateProgram(self.b_shader.program)
