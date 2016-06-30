@@ -14,9 +14,6 @@ class GLMesh(Mesh):
         Mesh.load_ply(self, filename)
 
         v_array=np.array(self.verts, dtype=np.float32)
-        v_array=v_array-np.sum(v_array, 0)/len(v_array)
-        bbox=(np.min(v_array,0),  np.max(v_array,0) )
-        v_array=v_array-0.5*(bbox[0] + bbox[1])
         bbox=(np.min(v_array,0),  np.max(v_array,0) )
 
         self.v_array = v_array.astype(np.float32)

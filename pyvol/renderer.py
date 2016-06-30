@@ -155,9 +155,9 @@ class VolumeObject(object):
         self.vao = glGenVertexArrays(1)
         glBindVertexArray(self.vao)
 
-        tl = np.array((shape[2]*spacing[2],
-                       shape[1]*spacing[1],
-                       shape[0]*spacing[0]))
+        tl = np.array((shape[2]*spacing[0],   # x
+                       shape[1]*spacing[1],   # y
+                       shape[0]*spacing[2]))  # z
 
         # Vertex buffer: corners of cube.
         # x, y, z, texture_x, texture_y, texture_z
@@ -188,9 +188,9 @@ class VolumeObject(object):
         sc = 1.0/la.norm(tl)
         c = 0.5*tl
 
-        self.transform = np.array(((0.0, 0.0, sc, -sc*c[2]),
+        self.transform = np.array(((sc, 0.0, 0.0, -sc*c[0]),
                                    (0.0, sc, 0.0, -sc*c[1]),
-                                   (sc, 0.0, 0.0, -sc*c[0]),
+                                   (0.0, 0.0, sc, -sc*c[2]),
                                    (0.0, 0.0, 0.0, 1.0)))
 
         self.tex_transform = np.array(((1.0/tl[0], 0.0, 0.0, 0.0),
@@ -488,7 +488,7 @@ class VolumeRenderer(object):
         glClear(GL_COLOR_BUFFER_BIT)  # Clear back buffer.
 
         glEnable(GL_CULL_FACE)
-        glCullFace(GL_BACK)  # NB flipped
+        glCullFace(GL_FRONT)  # NB flipped
 
 #        glValidateProgram(self.b_shader.program)
 #        logging.debug("b_valid ", glGetProgramiv(self.b_shader.program,
@@ -528,7 +528,7 @@ class VolumeRenderer(object):
         glUniform1i(self.f_shader.get_uniform("backfaceTex"), 1)
 
         glEnable(GL_CULL_FACE)
-        glCullFace(GL_FRONT)
+        glCullFace(GL_BACK)
 
         glBindVertexArray(volume_object.vao)
         volume_object.elVBO.bind()
