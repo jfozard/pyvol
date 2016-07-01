@@ -44,6 +44,7 @@ from OpenGL.GL import (
     glGenTextures,
     glTexImage2D,
     glTexImage3D,
+    glTexSubImage3D,
     glTexParameter,
     glActiveTexture,
     glBindTexture,
@@ -121,8 +122,7 @@ def perspective(fovy, aspect, zNear, zFar):
 
 class StackObject(object):
     def __init__(self, stack, spacing):
-        data = stack
-        s = np.array(data, dtype=np.uint8, order='F')
+        s = np.array(stack, dtype=np.uint8, order='F')
 
         w, h, d = s.shape
         stack_texture = glGenTextures(1)
@@ -144,6 +144,18 @@ class StackObject(object):
 
         self.stack_texture = stack_texture
         self.shape = s.shape
+
+    def update_stack(self, stack):
+        s = np.array(stack, dtype=np.uint8, order='F')
+        w, h, d = s.shape
+        glActiveTexture(GL_TEXTURE0)
+        glTexSubImage3D(GL_TEXTURE_3D,  # Target
+                        0,              # Level
+                        0, 0, 0,        # xoffset, yoffset, zoffset
+                        d, h, w,        # width, height, depth
+                        GL_RED,         # Format of the pixel data
+                        GL_UNSIGNED_BYTE,  # Type of the pixel data
+                        s)              # Data
 
 
 class VolumeObject(object):
@@ -202,6 +214,9 @@ class VolumeObject(object):
 
         self.elVBO = VBO(idx_out, target=GL_ELEMENT_ARRAY_BUFFER)
         self.elCount = len(idx_out.flatten())
+
+    def update_stack(self, stack):
+        self.stack_object.update_stack(stack)
 
 
 class MeshObject(object):
@@ -658,11 +673,11 @@ class BaseGlutWindow(BaseWindow):
 
     def zoom_in(self, x=None, y=None):
         self.zoom *= 1.1
-        OpenGL.GLUT.glutPostRedisplay()
+#       OpenGL.GLUT.glutPostRedisplay()
 
     def zoom_out(self, x=None, y=None):
         self.zoom *= 0.9
-        OpenGL.GLUT.glutPostRedisplay()
+#       OpenGL.GLUT.glutPostRedisplay()
 
     def exit(self, x=None, y=None):
         sys.exit(0)
@@ -713,6 +728,7 @@ class BaseGlutWindow(BaseWindow):
         if k in self.key_bindings:
             func = self.key_bindings[k]
             func(x, y)
+            OpenGL.GLUT.glutPostRedisplay()
 
     def _draw(self):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
