@@ -41,7 +41,7 @@ def inverted(self, x, y):
 
 def main():
     logging.basicConfig(level=logging.DEBUG)
-    r = ExampleVolumeVisualiser("Example Volume Visualiser", 800, 600)
+    r = ExampleVolumeVisualiser("Example Update Stack Visualiser", 800, 600)
     if len(sys.argv) >= 5:
         spacing = map(float, sys.argv[2:5])
     else:

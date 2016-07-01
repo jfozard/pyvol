@@ -1,7 +1,11 @@
-"""Example volume visualiser."""
+"""Example volume visualiser.
+
+press 't' to toggle volume on and off
+"""
 
 import sys
 import logging
+import types
 
 from renderer import BaseGlutWindow, VolumeRenderer
 
@@ -21,6 +25,11 @@ class ExampleVolumeVisualiser(BaseGlutWindow):
         self.renderer.init_back_texture(self.width, self.height)
         pass
 
+
+def toggle_volume(self, x, y):
+    self.renderer.volume_objects[0].active = not self.renderer.volume_objects[0].active
+
+
 def main():
     logging.basicConfig(level=logging.DEBUG)
     r = ExampleVolumeVisualiser("Example Volume Visualiser", 800, 600)
@@ -29,6 +38,10 @@ def main():
     else:
         spacing = (1.0, 1.0, 1.0)
     r.load_image(sys.argv[1], spacing)
+
+    r.toggle_volume = types.MethodType(toggle_volume, r)
+    r.key_bindings["t"] = r.toggle_volume
+
     r.start()
 
 if __name__ == '__main__':

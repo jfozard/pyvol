@@ -161,6 +161,7 @@ class StackObject(object):
 class VolumeObject(object):
 
     def __init__(self, stack, spacing):
+        self.active = True
         self.stack_object = StackObject(stack, spacing)
         shape = self.stack_object.shape
 
@@ -221,6 +222,7 @@ class VolumeObject(object):
 
 class MeshObject(object):
     def __init__(self, fn, spacing):
+        self.active = True
         m = GLMesh()
         self.mesh = m
         sc = m.load_ply(fn)
@@ -340,7 +342,8 @@ class IsosurfaceVolumeRenderer(object):
 
     def render(self, width, height, VMatrix, PMatrix):
         for volume_object in self.volume_objects:
-            self._render_volume_obj(volume_object, width, height, VMatrix, PMatrix)
+            if volume_object.active:
+                self._render_volume_obj(volume_object, width, height, VMatrix, PMatrix)
 
     def make_volume_obj(self, fn, spacing):
 
@@ -443,7 +446,8 @@ class SolidRenderer(object):
 
     def render(self, width, height, VMatrix, PMatrix):
         for solid_object in self.solid_objects:
-            self._render_solid_obj(solid_object, width, height, VMatrix, PMatrix)
+            if solid_object.active:
+                self._render_solid_obj(solid_object, width, height, VMatrix, PMatrix)
 
     def make_solid_obj(self, fn, spacing):
 
@@ -566,7 +570,8 @@ class VolumeRenderer(object):
 
     def render(self, width, height, VMatrix, PMatrix):
         for volume_object in self.volume_objects:
-            self._render_volume_obj(volume_object, width, height, VMatrix, PMatrix)
+            if volume_object.active:
+                self._render_volume_obj(volume_object, width, height, VMatrix, PMatrix)
 
     def make_volume_obj(self, stack, spacing):
 
@@ -633,9 +638,11 @@ class CompositeRenderer(VolumeRenderer, SolidRenderer):
 
     def render(self, width, height, VMatrix, PMatrix):
         for solid_object in self.solid_objects:
-            self._render_solid_obj(solid_object, width, height, VMatrix, PMatrix)
+            if solid_object.active:
+                self._render_solid_obj(solid_object, width, height, VMatrix, PMatrix)
         for volume_object in self.volume_objects:
-            self._render_volume_obj(volume_object, width, height, VMatrix, PMatrix)
+            if volume_object.active:
+                self._render_volume_obj(volume_object, width, height, VMatrix, PMatrix)
 
 
 class BaseWindow(object):
