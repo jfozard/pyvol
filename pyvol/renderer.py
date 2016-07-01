@@ -673,11 +673,9 @@ class BaseGlutWindow(BaseWindow):
 
     def zoom_in(self, x=None, y=None):
         self.zoom *= 1.1
-#       OpenGL.GLUT.glutPostRedisplay()
 
     def zoom_out(self, x=None, y=None):
         self.zoom *= 0.9
-#       OpenGL.GLUT.glutPostRedisplay()
 
     def exit(self, x=None, y=None):
         sys.exit(0)
