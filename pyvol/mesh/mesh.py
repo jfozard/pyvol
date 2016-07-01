@@ -2,7 +2,7 @@ import logging
 
 import numpy as np
 
-from io.ply_parser import parse_ply, write_ply
+from parser.ply_parser import parse_ply, write_ply
 from algo import *
 
 

@@ -9,7 +9,7 @@ import types
 
 from renderer import BaseGlutWindow, IsosurfaceVolumeRenderer
 
-from io.tiff_parser import open_tiff
+from parser.tiff_parser import open_tiff
 
 class ExampleIsosurfaceVisualiser(BaseGlutWindow):
 

@@ -104,7 +104,6 @@ from shaders.program import ShaderProgram, compile_vertex_shader_from_source, \
                             compile_fragment_shader_from_source
 
 from external.transformations import Arcball, translation_matrix, scale_matrix
-from io.tiff_parser import open_tiff
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 SHADER_SOURCE_DIR = os.path.join(HERE, "shaders")
