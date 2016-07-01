@@ -10,3 +10,4 @@ Simple examples of volume and surface rendering using OpenGL in Python
 ## Bugs
 
 - The setup.py file does not copy over shaders (i.e. non .py files)
+- Can we remove scipy dependence by using numpy linalg?
