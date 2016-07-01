@@ -9,4 +9,4 @@ Simple examples of volume and surface rendering using OpenGL in Python
 
 ## Bugs
 
-- The setup.py file does not copy over shaders (i.e. non .py files)
+- [Fixed in 0.1.1] The setup.py file does not copy over shaders (i.e. non .py files)
